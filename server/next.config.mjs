@@ -6,12 +6,9 @@ const __dirname = path.dirname(__filename);
 
 const nextConfig = {
   webpack: (config) => {
-    // Add resolve alias for symlinked packages
+    // Enable symlink resolution
     config.resolve = config.resolve || {};
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      'xxdk-wasm': path.resolve(__dirname, '../xxNetworkdemo/reactjs/node_modules/xxdk-wasm'),
-    };
+    config.resolve.symlinks = true;
     
     // Enable WASM support
     config.experiments = {

@@ -13,7 +13,7 @@
     "next": "14.2.18",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "xxdk-wasm": "file:../xxNetworkdemo/reactjs/node_modules/xxdk-wasm"
+    "xxdk-wasm": "^0.3.22"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
