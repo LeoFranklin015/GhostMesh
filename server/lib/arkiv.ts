@@ -7,8 +7,8 @@
 
 import { createClient, Annotation, Tagged } from 'arkiv-sdk'
 
-// Default expiration: 7 days (604800 seconds)
-const DEFAULT_EXPIRATION = 604800
+// Default expiration: 30 days (2592000 seconds)
+const DEFAULT_EXPIRATION = 2592000
 
 // Default chain ID for Mendoza testnet
 const DEFAULT_CHAIN_ID = 60138453056
