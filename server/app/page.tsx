@@ -3,7 +3,10 @@
 import { useEffect, useState, useRef } from 'react'
 import Dexie from 'dexie'
 import { 
-  initializeArkivClient, 
+  initializeArkivClient,
+  connectMetaMask,
+  getConnectedAccount,
+  isMetaMaskAvailable,
   storeMessageToArkiv,
   readMessagesFromArkiv,
   updateMessageInArkiv,
@@ -23,7 +26,8 @@ export default function ServerPage() {
     arkivEntityKey?: string
     arkivError?: string
   }>>([])
-  const [arkivStatus, setArkivStatus] = useState<'initializing' | 'ready' | 'not-configured' | 'error'>('initializing')
+  const [arkivStatus, setArkivStatus] = useState<'initializing' | 'ready' | 'not-configured' | 'error' | 'connecting'>('initializing')
+  const [metaMaskAccount, setMetaMaskAccount] = useState<string | null>(null)
   const [testInput, setTestInput] = useState<string>('')
   const [testOutput, setTestOutput] = useState<string>('')
   const [testStatus, setTestStatus] = useState<string>('')
@@ -125,19 +129,33 @@ export default function ServerPage() {
         console.error('⚠️ Encryption key initialization error:', err)
       })
       
-      // Initialize Arkiv client
-      initializeArkivClient().then((success) => {
-        if (success) {
-          console.log('✅ Arkiv storage ready')
+      // Check MetaMask availability and initialize Arkiv client
+      if (isMetaMaskAvailable()) {
+        // Check if already connected
+        const account = getConnectedAccount()
+        if (account) {
+          setMetaMaskAccount(account)
           setArkivStatus('ready')
         } else {
-          console.log('⚠️ Arkiv storage not available (check environment variables)')
           setArkivStatus('not-configured')
         }
-      }).catch((err) => {
-        console.error('⚠️ Arkiv initialization error:', err)
-        setArkivStatus('error')
-      })
+        
+        // Listen for account changes
+        if (typeof window !== 'undefined' && window.ethereum) {
+          window.ethereum.on('accountsChanged', (accounts: string[]) => {
+            if (accounts.length === 0) {
+              setMetaMaskAccount(null)
+              setArkivStatus('not-configured')
+            } else {
+              setMetaMaskAccount(accounts[0])
+              setArkivStatus('ready')
+            }
+          })
+        }
+      } else {
+        console.log('⚠️ MetaMask not detected. Please install MetaMask extension.')
+        setArkivStatus('not-configured')
+      }
       
       setStatus('🔄 Setting up Direct Messaging...')
       
@@ -395,22 +413,64 @@ export default function ServerPage() {
             <p className="font-mono text-sm">{status}</p>
           </div>
           
-          {/* Arkiv Status */}
-          <div className="mt-4 flex items-center space-x-3">
-            <div className={`w-3 h-3 rounded-full ${
-              arkivStatus === 'ready' ? 'bg-green-500' :
-              arkivStatus === 'not-configured' ? 'bg-yellow-500' :
-              arkivStatus === 'error' ? 'bg-red-500' :
-              'bg-gray-500 animate-pulse'
-            }`} />
-            <p className="text-sm text-slate-300">
-              Arkiv Storage: {
-                arkivStatus === 'ready' ? '✅ Ready' :
-                arkivStatus === 'not-configured' ? '⚠️ Not configured' :
-                arkivStatus === 'error' ? '❌ Error' :
-                '🔄 Initializing...'
-              }
-            </p>
+          {/* Arkiv Status with MetaMask */}
+          <div className="mt-4 space-y-2">
+            <div className="flex items-center space-x-3">
+              <div className={`w-3 h-3 rounded-full ${
+                arkivStatus === 'ready' ? 'bg-green-500' :
+                arkivStatus === 'not-configured' ? 'bg-yellow-500' :
+                arkivStatus === 'error' ? 'bg-red-500' :
+                arkivStatus === 'connecting' ? 'bg-blue-500 animate-pulse' :
+                'bg-gray-500 animate-pulse'
+              }`} />
+              <p className="text-sm text-slate-300">
+                Arkiv Storage (MetaMask): {
+                  arkivStatus === 'ready' ? '✅ Ready' :
+                  arkivStatus === 'not-configured' ? '⚠️ Not connected' :
+                  arkivStatus === 'error' ? '❌ Error' :
+                  arkivStatus === 'connecting' ? '🔄 Connecting...' :
+                  '🔄 Initializing...'
+                }
+              </p>
+            </div>
+            
+            {metaMaskAccount && (
+              <div className="ml-6 text-xs text-slate-400">
+                Connected: {metaMaskAccount.substring(0, 6)}...{metaMaskAccount.substring(38)}
+              </div>
+            )}
+            
+            {arkivStatus === 'not-configured' && isMetaMaskAvailable() && (
+              <button
+                onClick={async () => {
+                  setArkivStatus('connecting')
+                  try {
+                    const success = await connectMetaMask()
+                    if (success) {
+                      const account = getConnectedAccount()
+                      setMetaMaskAccount(account)
+                      setArkivStatus('ready')
+                    } else {
+                      setArkivStatus('not-configured')
+                      alert('Failed to connect MetaMask. Please make sure MetaMask is installed and unlocked.')
+                    }
+                  } catch (error: any) {
+                    console.error('MetaMask connection error:', error)
+                    setArkivStatus('error')
+                    alert(`Failed to connect: ${error.message}`)
+                  }
+                }}
+                className="ml-6 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm text-white"
+              >
+                🦊 Connect MetaMask
+              </button>
+            )}
+            
+            {!isMetaMaskAvailable() && (
+              <div className="ml-6 text-xs text-yellow-400">
+                ⚠️ MetaMask not detected. Please install MetaMask extension.
+              </div>
+            )}
           </div>
           
           {error && (
@@ -906,11 +966,11 @@ export default function ServerPage() {
                             if (!msg.arkivEntityKey) return
                             const hours = prompt('Extend by how many hours? (default: 12)', '12')
                             if (hours) {
-                              const blocks = parseInt(hours) * 3600 // Convert hours to seconds
-                              addCrudLog('EXTEND', 'success', `Extending entity by ${hours} hours...`, msg.arkivEntityKey)
-                              const result = await extendMessageInArkiv(msg.arkivEntityKey, blocks)
+                              const hoursNum = parseInt(hours) || 12
+                              addCrudLog('EXTEND', 'success', `Extending entity by ${hoursNum} hours...`, msg.arkivEntityKey)
+                              const result = await extendMessageInArkiv(msg.arkivEntityKey, hoursNum)
                               if (result.success) {
-                                addCrudLog('EXTEND', 'success', `Entity extended successfully. New expiration block: ${result.newExpirationBlock}`, result.entityKey, { newExpirationBlock: result.newExpirationBlock })
+                                addCrudLog('EXTEND', 'success', `Entity extended successfully by ${hoursNum} hours`, result.entityKey)
                               } else {
                                 addCrudLog('EXTEND', 'error', result.error || 'Extend failed', msg.arkivEntityKey)
                               }
@@ -1049,3 +1109,4 @@ export default function ServerPage() {
     </div>
   )
 }
+

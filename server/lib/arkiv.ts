@@ -1,20 +1,34 @@
 /**
  * Arkiv Storage Utility
  * Handles storing received messages to Arkiv decentralized storage
- * Uses the same API as demo.ts
+ * Uses the new @arkiv-network/sdk API
  * Includes encryption layer before storing to Arkiv
  */
 
-import { createClient, Annotation, Tagged } from 'arkiv-sdk'
+import { createWalletClient, createPublicClient, custom, http } from "@arkiv-network/sdk"
+import { mendoza } from "@arkiv-network/sdk/chains"
+import { ExpirationTime, jsonToPayload } from "@arkiv-network/sdk/utils"
+import { eq } from "@arkiv-network/sdk/query"
+import { toAccount } from "@arkiv-network/sdk/accounts"
 
-// Default expiration: 30 days (2592000 seconds)
-const DEFAULT_EXPIRATION = 2592000
+// Extend Window interface for MetaMask
+declare global {
+  interface Window {
+    ethereum?: {
+      request: (args: { method: string; params?: any[] }) => Promise<any>
+      on: (event: string, handler: (accounts: string[]) => void) => void
+      removeListener: (event: string, handler: (accounts: string[]) => void) => void
+    }
+  }
+}
 
-// Default chain ID for Mendoza testnet
-const DEFAULT_CHAIN_ID = 60138453056
+// Default expiration: 30 days (2592000 seconds = 720 hours)
+const DEFAULT_EXPIRATION_HOURS = 720
 
-let arkivClient: any = null
+let walletClient: any = null
+let publicClient: any = null
 let isInitialized = false
+let connectedAccount: string | null = null
 
 // Encryption key (will be generated or loaded from env)
 let encryptionKey: CryptoKey | null = null
@@ -244,51 +258,124 @@ export async function decryptData(encryptedData: string): Promise<string> {
 }
 
 /**
- * Initialize Arkiv client
- * Returns true if successful, false otherwise
+ * Add Arkiv Network to MetaMask
  */
-export async function initializeArkivClient(): Promise<boolean> {
-  if (isInitialized && arkivClient) {
-    return true
+export async function addArkivNetworkToMetaMask(): Promise<boolean> {
+  if (typeof window === 'undefined' || typeof window.ethereum === 'undefined') {
+    console.warn('⚠️ MetaMask not detected')
+    return false
   }
 
   try {
-    // Get environment variables (client-side access requires NEXT_PUBLIC_ prefix)
-    const privateKey = process.env.NEXT_PUBLIC_ARKIV_PRIVATE_KEY
-    const rpcUrl = process.env.NEXT_PUBLIC_ARKIV_RPC_URL || 'https://mendoza.hoodi.arkiv.network/rpc'
-    const wsUrl = process.env.NEXT_PUBLIC_ARKIV_WS_URL || 'wss://mendoza.hoodi.arkiv.network/rpc/ws'
-    const chainIdStr = process.env.NEXT_PUBLIC_ARKIV_CHAIN_ID || String(DEFAULT_CHAIN_ID)
-
-    if (!privateKey) {
-      console.warn('⚠️ Arkiv: Private key not configured. Messages will not be stored to Arkiv.')
-      return false
-    }
-
-    // Parse chain ID
-    const chainId = Number(chainIdStr)
-    if (!Number.isFinite(chainId) || chainId <= 0) {
-      console.error(`❌ Invalid CHAIN_ID value: ${chainIdStr}`)
-      return false
-    }
-
-    // Remove 0x prefix from private key if present for hex conversion
-    const privateKeyHex = privateKey.startsWith('0x') ? privateKey.slice(2) : privateKey
-
-    // Create Arkiv client using the same API as demo.ts
-    arkivClient = await createClient(
-      chainId,
-      new Tagged("privatekey", Buffer.from(privateKeyHex, "hex")),
-      rpcUrl,
-      wsUrl
-    )
-
-    isInitialized = true
-    console.log('✅ Arkiv client initialized successfully')
+    await window.ethereum.request({
+      method: 'wallet_addEthereumChain',
+      params: [{
+        chainId: '0xe0087f840', // 60138453056 in hex
+        chainName: 'Arkiv Mendoza Testnet',
+        nativeCurrency: {
+          name: 'ETH',
+          symbol: 'ETH',
+          decimals: 18
+        },
+        rpcUrls: ['https://mendoza.hoodi.arkiv.network/rpc'],
+        blockExplorerUrls: ['https://explorer.mendoza.hoodi.arkiv.network']
+      }]
+    })
+    console.log('✅ Arkiv network added to MetaMask')
     return true
   } catch (error: any) {
-    console.error('❌ Failed to initialize Arkiv client:', error.message)
+    // Network might already be added, which is fine
+    if (error.code === 4902) {
+      console.log('ℹ️ Arkiv network already added to MetaMask')
+      return true
+    }
+    console.error('❌ Failed to add Arkiv network:', error)
     return false
   }
+}
+
+/**
+ * Connect to MetaMask and initialize Arkiv client
+ * Returns true if successful, false otherwise
+ */
+export async function connectMetaMask(): Promise<boolean> {
+  if (typeof window === 'undefined' || typeof window.ethereum === 'undefined') {
+    console.warn('⚠️ MetaMask not detected. Please install MetaMask extension.')
+    return false
+  }
+
+  try {
+    // Add Arkiv network to MetaMask first
+    await addArkivNetworkToMetaMask()
+
+    // Request account access from MetaMask
+    const accounts = await window.ethereum.request({ 
+      method: 'eth_requestAccounts' 
+    })
+
+    if (!accounts || accounts.length === 0) {
+      console.warn('⚠️ No accounts found in MetaMask')
+      return false
+    }
+
+    connectedAccount = accounts[0]
+    console.log('✅ Connected to MetaMask account:', connectedAccount)
+
+    // Create account object from MetaMask address
+    // This ensures the wallet client has the account available for signing
+    const account = toAccount(connectedAccount as `0x${string}`)
+
+    // Create wallet client with MetaMask provider (for write operations)
+    // Pass the account explicitly to ensure it's available for transactions
+    walletClient = createWalletClient({
+      chain: mendoza,
+      transport: custom(window.ethereum), // Use MetaMask for signing
+      account: account, // Explicitly set the account
+    })
+    
+    console.log('✅ Wallet client created with MetaMask transport and account:', connectedAccount)
+
+    // Create public client for read operations (no wallet needed)
+    publicClient = createPublicClient({
+      chain: mendoza,
+      transport: http(), // Use public RPC
+    })
+
+    isInitialized = true
+    console.log('✅ Arkiv clients initialized successfully with MetaMask')
+    return true
+  } catch (error: any) {
+    console.error('❌ Failed to connect MetaMask:', error.message)
+    return false
+  }
+}
+
+/**
+ * Initialize Arkiv client (legacy function for backward compatibility)
+ * Now uses MetaMask instead of private key
+ * Returns true if successful, false otherwise
+ */
+export async function initializeArkivClient(): Promise<boolean> {
+  if (isInitialized && walletClient && publicClient) {
+    return true
+  }
+
+  // Try to connect with MetaMask
+  return await connectMetaMask()
+}
+
+/**
+ * Get connected MetaMask account
+ */
+export function getConnectedAccount(): string | null {
+  return connectedAccount
+}
+
+/**
+ * Check if MetaMask is available
+ */
+export function isMetaMaskAvailable(): boolean {
+  return typeof window !== 'undefined' && typeof window.ethereum !== 'undefined'
 }
 
 /**
@@ -322,7 +409,7 @@ export async function storeMessageToArkiv(
 ): Promise<{ success: boolean; entityKey?: string; error?: string }> {
   try {
     // Initialize client if not already done
-    if (!isInitialized || !arkivClient) {
+    if (!isInitialized || !walletClient) {
       const initialized = await initializeArkivClient()
       if (!initialized) {
         const errorMsg = '⚠️ Arkiv: Client not initialized, skipping storage'
@@ -407,27 +494,55 @@ export async function storeMessageToArkiv(
     }
     console.log('✅ [CREATE] Final verification passed - encrypted content confirmed in payload')
 
-    // Generate entity ID (matching demo.ts pattern)
+    // Verify account is available before creating entity
+    // When using custom(window.ethereum), the account should be auto-detected
+    // But we need to ensure MetaMask is connected
+    if (typeof window === 'undefined' || !window.ethereum) {
+      return { success: false, error: 'MetaMask not available. Please install and connect MetaMask.' }
+    }
+    
+    // Check if account is connected in MetaMask
+    const accounts = await window.ethereum.request({ method: 'eth_accounts' })
+    if (!accounts || accounts.length === 0) {
+      return { success: false, error: 'No MetaMask account connected. Please connect MetaMask first by clicking "Connect MetaMask" button.' }
+    }
+    
+    console.log('✅ Account verified for storage:', accounts[0])
+    
+    // Ensure wallet client is properly initialized with account
+    // The account should be automatically available when using custom(window.ethereum)
+    // But we verify it's accessible
+    if (!walletClient) {
+      return { success: false, error: 'Wallet client not initialized. Please connect MetaMask first.' }
+    }
+
+    // Generate entity ID
     const entityId = generateUUID()
 
-    // Create entity using createEntities (plural) with Annotation objects (matching demo.ts)
-    const receipt = await arkivClient.createEntities([{
-      data: new TextEncoder().encode(payloadToStore),
-      expiresIn: DEFAULT_EXPIRATION, // 7 days in seconds
-      stringAnnotations: [
-        new Annotation("type", messagePayload.type),
-        new Annotation("source", messagePayload.source),
-        new Annotation("id", entityId),
-        ...(messageData.uuid ? [new Annotation("uuid", messageData.uuid)] : []),
-        ...(messageData.from ? [new Annotation("from", messageData.from.substring(0, 20))] : [])
-      ],
-      numericAnnotations: [
-        new Annotation("timestamp", new Date(messageData.timestamp).getTime()),
-        new Annotation("created", Date.now())
-      ]
-    }])
+    // Verify account is set on wallet client
+    if (!walletClient.account) {
+      return { success: false, error: 'Account not set on wallet client. Please reconnect MetaMask.' }
+    }
+    
+    console.log('✅ Using account for storage:', walletClient.account.address)
 
-    const entityKey = receipt[0].entityKey
+    // Create entity using new SDK API
+    // The account is explicitly set on the wallet client, so it should work
+    const { entityKey } = await walletClient.createEntity({
+      payload: jsonToPayload(encryptedPayload),
+      contentType: 'application/json',
+      attributes: [
+        { key: 'type', value: messagePayload.type },
+        { key: 'source', value: messagePayload.source },
+        { key: 'id', value: entityId },
+        ...(messageData.uuid ? [{ key: 'uuid', value: messageData.uuid }] : []),
+        ...(messageData.from ? [{ key: 'from', value: messageData.from.substring(0, 20) }] : []),
+        { key: 'timestamp', value: String(new Date(messageData.timestamp).getTime()) },
+        { key: 'created', value: String(Date.now()) }
+      ],
+      expiresIn: ExpirationTime.fromHours(DEFAULT_EXPIRATION_HOURS),
+    })
+
     console.log('✅ [CREATE] Message stored to Arkiv:', entityKey)
     return { success: true, entityKey }
   } catch (error: any) {
@@ -447,18 +562,39 @@ export async function readMessagesFromArkiv(
   query: string = 'type = "xx-network-message"'
 ): Promise<{ success: boolean; entities?: any[]; error?: string }> {
   try {
-    if (!isInitialized || !arkivClient) {
+    if (!isInitialized || !publicClient) {
       const initialized = await initializeArkivClient()
       if (!initialized) {
         return { success: false, error: 'Arkiv client not initialized' }
       }
     }
 
-    const entities = await arkivClient.queryEntities(query)
+    // Build query using new SDK API
+    const queryBuilder = publicClient.buildQuery()
+    const entities = await queryBuilder
+      .where(eq('type', 'xx-network-message'))
+      .withAttributes(true)
+      .withPayload(true)
+      .fetch()
+    
     console.log(`✅ [READ] Found ${entities.length} entity/entities`)
 
     const results = await Promise.all(entities.map(async (entity: any) => {
-      const rawData = JSON.parse(new TextDecoder().decode(entity.storageValue))
+      // Parse payload from new SDK format
+      let rawData: any
+      if (entity.payload) {
+        // New SDK returns payload as Uint8Array or string
+        if (typeof entity.payload === 'string') {
+          rawData = JSON.parse(entity.payload)
+        } else if (entity.payload instanceof Uint8Array) {
+          rawData = JSON.parse(new TextDecoder().decode(entity.payload))
+        } else {
+          rawData = entity.payload
+        }
+      } else {
+        // Fallback for old format
+        rawData = JSON.parse(new TextDecoder().decode(entity.storageValue || new Uint8Array()))
+      }
       
       // Check if data has encrypted content field
       let decryptedData = rawData.data || rawData
@@ -492,7 +628,7 @@ export async function readMessagesFromArkiv(
       }
       
       return {
-        entityKey: entity.entityKey,
+        entityKey: entity.entityKey || entity.key,
         data: decryptedData,
         encrypted: rawData.encrypted || false,
         encryptedData: encryptedContentString, // Encrypted content field for display
@@ -519,17 +655,17 @@ export async function readMessagesFromArkiv(
 export async function updateMessageInArkiv(
   entityKey: string,
   newData: any,
-  expiresIn: number = DEFAULT_EXPIRATION
+  expiresInHours: number = DEFAULT_EXPIRATION_HOURS
 ): Promise<{ success: boolean; entityKey?: string; error?: string }> {
   try {
-    if (!isInitialized || !arkivClient) {
+    if (!isInitialized || !walletClient) {
       const initialized = await initializeArkivClient()
       if (!initialized) {
         return { success: false, error: 'Arkiv client not initialized' }
       }
     }
 
-    console.log('🔄 [UPDATE] Updating entity...', { entityKey, newData, expiresIn })
+    console.log('🔄 [UPDATE] Updating entity...', { entityKey, newData, expiresInHours })
 
     // Encrypt only the content field before storing
     const encryptedContent = await encryptData(newData.content || '')
@@ -549,20 +685,20 @@ export async function updateMessageInArkiv(
       data: updatedPayload
     }
 
-    const updateReceipt = await arkivClient.updateEntities([{
-      entityKey: entityKey,
-      data: new TextEncoder().encode(JSON.stringify(encryptedPayload)),
-      expiresIn: expiresIn,
-      stringAnnotations: [
-        new Annotation("type", newData.type || "xx-network-message")
+    // Update entity using new SDK API
+    const { entityKey: updatedKey } = await walletClient.updateEntity({
+      entityKey: entityKey as `0x${string}`,
+      payload: jsonToPayload(encryptedPayload),
+      contentType: 'application/json',
+      attributes: [
+        { key: 'type', value: newData.type || "xx-network-message" },
+        { key: 'updated', value: String(Date.now()) }
       ],
-      numericAnnotations: [
-        new Annotation("updated", Date.now())
-      ]
-    }])
+      expiresIn: ExpirationTime.fromHours(expiresInHours),
+    })
 
-    console.log('✅ [UPDATE] Entity updated successfully:', updateReceipt[0].entityKey)
-    return { success: true, entityKey: updateReceipt[0].entityKey }
+    console.log('✅ [UPDATE] Entity updated successfully:', updatedKey)
+    return { success: true, entityKey: updatedKey }
   } catch (error: any) {
     const errorMsg = error.message || String(error)
     console.error('❌ [UPDATE] Failed to update entity:', errorMsg)
@@ -579,7 +715,7 @@ export async function deleteMessageFromArkiv(
   entityKey: string
 ): Promise<{ success: boolean; entityKey?: string; error?: string }> {
   try {
-    if (!isInitialized || !arkivClient) {
+    if (!isInitialized || !walletClient) {
       const initialized = await initializeArkivClient()
       if (!initialized) {
         return { success: false, error: 'Arkiv client not initialized' }
@@ -588,9 +724,13 @@ export async function deleteMessageFromArkiv(
 
     console.log('🗑️ [DELETE] Deleting entity...', { entityKey })
 
-    const deleteReceipt = await arkivClient.deleteEntities([entityKey])
-    console.log('✅ [DELETE] Entity deleted successfully:', deleteReceipt[0].entityKey)
-    return { success: true, entityKey: deleteReceipt[0].entityKey }
+    // Delete entity using new SDK API
+    await walletClient.deleteEntity({
+      entityKey: entityKey as `0x${string}`,
+    })
+    
+    console.log('✅ [DELETE] Entity deleted successfully:', entityKey)
+    return { success: true, entityKey }
   } catch (error: any) {
     const errorMsg = error.message || String(error)
     console.error('❌ [DELETE] Failed to delete entity:', errorMsg)
@@ -606,32 +746,31 @@ export async function deleteMessageFromArkiv(
  */
 export async function extendMessageInArkiv(
   entityKey: string,
-  numberOfBlocks: number = 43200 // 12 hours default
+  additionalHours: number = 12 // 12 hours default
 ): Promise<{ success: boolean; entityKey?: string; newExpirationBlock?: number; error?: string }> {
   try {
-    if (!isInitialized || !arkivClient) {
+    if (!isInitialized || !walletClient) {
       const initialized = await initializeArkivClient()
       if (!initialized) {
         return { success: false, error: 'Arkiv client not initialized' }
       }
     }
 
-    console.log('⏰ [EXTEND] Extending entity lifetime...', { entityKey, numberOfBlocks })
+    console.log('⏰ [EXTEND] Extending entity lifetime...', { entityKey, additionalHours })
 
-    const extendReceipt = await arkivClient.extendEntities([{
-      entityKey: entityKey,
-      numberOfBlocks: numberOfBlocks
-    }])
+    // Extend entity using new SDK API
+    const { entityKey: extendedKey } = await walletClient.extendEntity({
+      entityKey: entityKey as `0x${string}`,
+      expiresIn: ExpirationTime.fromHours(additionalHours),
+    })
 
     console.log('✅ [EXTEND] Entity lifetime extended successfully:', {
-      entityKey: extendReceipt[0].entityKey,
-      newExpirationBlock: extendReceipt[0].newExpirationBlock
+      entityKey: extendedKey
     })
 
     return {
       success: true,
-      entityKey: extendReceipt[0].entityKey,
-      newExpirationBlock: extendReceipt[0].newExpirationBlock
+      entityKey: extendedKey
     }
   } catch (error: any) {
     const errorMsg = error.message || String(error)
