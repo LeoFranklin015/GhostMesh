@@ -571,29 +571,73 @@ export async function readMessagesFromArkiv(
 
     // Build query using new SDK API
     const queryBuilder = publicClient.buildQuery()
-    const entities = await queryBuilder
+    const queryResult = await queryBuilder
       .where(eq('type', 'xx-network-message'))
       .withAttributes(true)
       .withPayload(true)
       .fetch()
     
+    // Handle different return types - ensure we have an array
+    let entities: any[] = []
+    if (Array.isArray(queryResult)) {
+      entities = queryResult
+    } else if (queryResult && typeof queryResult === 'object') {
+      // If it's an object, check if it has an entities property or convert it
+      if (Array.isArray(queryResult.entities)) {
+        entities = queryResult.entities
+      } else if (queryResult.data && Array.isArray(queryResult.data)) {
+        entities = queryResult.data
+      } else {
+        // If it's a single entity object, wrap it in an array
+        entities = [queryResult]
+      }
+    }
+    
     console.log(`✅ [READ] Found ${entities.length} entity/entities`)
+    console.log('✅ [READ] Query result type:', typeof queryResult, Array.isArray(queryResult) ? 'array' : 'object')
 
     const results = await Promise.all(entities.map(async (entity: any) => {
       // Parse payload from new SDK format
       let rawData: any
+      
+      // Log entity structure for debugging
+      console.log('🔍 [READ] Entity structure:', {
+        hasPayload: !!entity.payload,
+        hasStorageValue: !!entity.storageValue,
+        hasData: !!entity.data,
+        entityKeys: Object.keys(entity)
+      })
+      
       if (entity.payload) {
         // New SDK returns payload as Uint8Array or string
         if (typeof entity.payload === 'string') {
           rawData = JSON.parse(entity.payload)
         } else if (entity.payload instanceof Uint8Array) {
           rawData = JSON.parse(new TextDecoder().decode(entity.payload))
+        } else if (entity.payload instanceof ArrayBuffer) {
+          rawData = JSON.parse(new TextDecoder().decode(new Uint8Array(entity.payload)))
+        } else if (typeof entity.payload === 'object') {
+          // Payload might already be parsed
+          rawData = entity.payload
         } else {
           rawData = entity.payload
         }
-      } else {
+      } else if (entity.data) {
+        // Check if data is already parsed
+        rawData = entity.data
+      } else if (entity.storageValue) {
         // Fallback for old format
-        rawData = JSON.parse(new TextDecoder().decode(entity.storageValue || new Uint8Array()))
+        if (typeof entity.storageValue === 'string') {
+          rawData = JSON.parse(entity.storageValue)
+        } else if (entity.storageValue instanceof Uint8Array) {
+          rawData = JSON.parse(new TextDecoder().decode(entity.storageValue))
+        } else {
+          rawData = JSON.parse(new TextDecoder().decode(new Uint8Array(entity.storageValue)))
+        }
+      } else {
+        // If no payload/data found, use entity as-is
+        console.warn('⚠️ [READ] No payload/data found in entity, using entity as-is')
+        rawData = entity
       }
       
       // Check if data has encrypted content field
@@ -627,8 +671,11 @@ export async function readMessagesFromArkiv(
         decryptedContentString = rawData.data?.content || null
       }
       
+      // Extract entity key from various possible locations
+      const entityKey = entity.entityKey || entity.key || entity.id || entity.entityKey || null
+      
       return {
-        entityKey: entity.entityKey || entity.key,
+        entityKey: entityKey,
         data: decryptedData,
         encrypted: rawData.encrypted || false,
         encryptedData: encryptedContentString, // Encrypted content field for display
