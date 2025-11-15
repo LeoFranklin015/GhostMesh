@@ -8,7 +8,8 @@ import {
   readMessagesFromArkiv,
   updateMessageInArkiv,
   deleteMessageFromArkiv,
-  extendMessageInArkiv
+  extendMessageInArkiv,
+  getEncryptionKey
 } from '../lib/arkiv'
 
 export default function ServerPage() {
@@ -23,6 +24,21 @@ export default function ServerPage() {
     arkivError?: string
   }>>([])
   const [arkivStatus, setArkivStatus] = useState<'initializing' | 'ready' | 'not-configured' | 'error'>('initializing')
+  const [testInput, setTestInput] = useState<string>('')
+  const [testOutput, setTestOutput] = useState<string>('')
+  const [testStatus, setTestStatus] = useState<string>('')
+  const [testEntityKey, setTestEntityKey] = useState<string | null>(null)
+  const [testEntityData, setTestEntityData] = useState<any>(null)
+  const [testEncryptedData, setTestEncryptedData] = useState<string | null>(null)
+  const [testDecryptedData, setTestDecryptedData] = useState<string | null>(null)
+  const [readMessages, setReadMessages] = useState<Array<{
+    entityKey: string
+    data: any
+    encrypted: boolean
+    encryptedData?: string
+    decryptedData?: string
+    timestamp: string
+  }>>([])
   const [crudLogs, setCrudLogs] = useState<Array<{
     timestamp: string
     operation: 'CREATE' | 'READ' | 'UPDATE' | 'DELETE' | 'EXTEND'
@@ -99,8 +115,17 @@ export default function ServerPage() {
       
       setStatus('✅ CMix client loaded')
       
-      // Initialize Arkiv client (non-blocking)
-      setStatus('🔄 Initializing Arkiv storage...')
+      // Initialize encryption key and Arkiv client (non-blocking)
+      setStatus('🔄 Initializing encryption and Arkiv storage...')
+      
+      // Initialize encryption key (silently, key is already in env)
+      getEncryptionKey().then((key) => {
+        console.log('🔑 Encryption key ready')
+      }).catch((err) => {
+        console.error('⚠️ Encryption key initialization error:', err)
+      })
+      
+      // Initialize Arkiv client
       initializeArkivClient().then((success) => {
         if (success) {
           console.log('✅ Arkiv storage ready')
@@ -210,7 +235,9 @@ export default function ServerPage() {
                     arkivStatus: 'storing'
                   }])
                   
-                  // Store message to Arkiv (new functionality - non-blocking)
+                  // Encrypt and store message to Arkiv (new functionality - non-blocking)
+                  // storeMessageToArkiv automatically encrypts with key from env before storing
+                  console.log('🔒 [MAIN] XX Network message will be encrypted with key before storing to Arkiv...')
                   storeMessageToArkiv({
                     content: decryptedText,
                     from: e.pubKey || 'unknown',
@@ -393,6 +420,321 @@ export default function ServerPage() {
           )}
         </div>
 
+        {/* Testing Section */}
+        <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-lg p-6">
+          <h2 className="text-xl font-semibold mb-4">🧪 Test Encryption/Decryption & Arkiv Storage</h2>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm text-slate-400 mb-2">Test Message:</label>
+              <textarea
+                value={testInput}
+                onChange={(e) => setTestInput(e.target.value)}
+                placeholder="Enter text to test encryption/decryption and Arkiv storage..."
+                className="w-full bg-slate-900/50 border border-slate-700 rounded-lg p-3 text-white font-mono text-sm resize-none"
+                rows={3}
+              />
+            </div>
+            
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={async () => {
+                  if (!testInput.trim()) {
+                    setTestStatus('❌ Please enter some text first')
+                    return
+                  }
+                  try {
+                    setTestStatus('🔄 Storing to Arkiv...')
+                    const testMessageData = {
+                      content: testInput,
+                      from: 'test-user',
+                      timestamp: new Date().toISOString(),
+                      uuid: 'test-' + Date.now()
+                    }
+                    // storeMessageToArkiv will automatically encrypt before storing
+                    // Only encrypted data will be stored in Arkiv (no plaintext)
+                    console.log('🔒 [TEST] Message will be encrypted and only encrypted data stored in Arkiv...')
+                    const result = await storeMessageToArkiv(testMessageData)
+                    if (result.success) {
+                      setTestEntityKey(result.entityKey || null)
+                      // Note: We don't store plaintext data in state - only encrypted data is in Arkiv
+                      setTestEntityData({
+                        entityKey: result.entityKey,
+                        storedAt: new Date().toISOString(),
+                        encrypted: true,
+                        note: 'Only encrypted data is stored in Arkiv'
+                      })
+                      setTestStatus(`✅ Message encrypted and stored to Arkiv! Only encrypted data is stored.`)
+                      addCrudLog('CREATE', 'success', 'Test message encrypted and stored to Arkiv (only encrypted data stored)', result.entityKey)
+                    } else {
+                      setTestStatus(`❌ Storage failed: ${result.error}`)
+                      addCrudLog('CREATE', 'error', `Test storage failed: ${result.error}`)
+                    }
+                  } catch (error: any) {
+                    setTestStatus(`❌ Storage failed: ${error.message}`)
+                    addCrudLog('CREATE', 'error', `Test storage failed: ${error.message}`)
+                  }
+                }}
+                className="px-4 py-2 bg-purple-700 hover:bg-purple-600 rounded text-sm"
+              >
+                💾 Store to Arkiv
+              </button>
+              
+              <button
+                onClick={async () => {
+                  try {
+                    setTestStatus('🔄 Reading from Arkiv...')
+                    const result = await readMessagesFromArkiv('type = "xx-network-message"')
+                    if (result.success) {
+                      const allMessages = result.entities || []
+                      const testMessages = allMessages.filter((e: any) => 
+                        e.data?.from === 'test-user'
+                      )
+                      
+                      // Update read messages state for UI display
+                      const formattedMessages = allMessages.map((e: any) => ({
+                        entityKey: e.entityKey,
+                        data: e.data,
+                        encrypted: e.encrypted,
+                        encryptedData: e.encryptedData, // Full encrypted data
+                        decryptedData: e.decryptedData, // Full decrypted data
+                        timestamp: e.data?.timestamp || new Date().toISOString()
+                      }))
+                      setReadMessages(formattedMessages)
+                      
+                      // Log encryption/decryption info
+                      console.log('📖 [READ] Retrieved messages from Arkiv:')
+                      formattedMessages.forEach((msg, idx) => {
+                        console.log(`  Message ${idx + 1}:`)
+                        console.log(`    Entity Key: ${msg.entityKey}`)
+                        console.log(`    Encrypted: ${msg.encrypted}`)
+                        if (msg.encrypted) {
+                          console.log(`    Encrypted Data Length: ${msg.encryptedData?.length || 0}`)
+                          console.log(`    Decrypted Content: ${msg.data?.content || 'N/A'}`)
+                        }
+                      })
+                      
+                      if (testMessages.length > 0) {
+                        const latest = testMessages[0]
+                        // Decrypted content is now available after reading from Arkiv
+                        setTestInput(latest.data?.content || '')
+                        setTestEntityKey(latest.entityKey)
+                        setTestEntityData(latest)
+                        
+                        // Show encrypted content (what was stored) and decrypted content (after decryption)
+                        if (latest.encryptedData) {
+                          console.log('🔒 [TEST] Retrieved encrypted content from Arkiv (this is what was stored)')
+                          setTestEncryptedData(latest.encryptedData)
+                        }
+                        if (latest.decryptedData) {
+                          console.log('🔓 [TEST] Decrypted content with key (this is the original message)')
+                          setTestDecryptedData(latest.decryptedData)
+                        }
+                        
+                        setTestStatus(`✅ Found ${testMessages.length} test message(s) and ${allMessages.length} total message(s). Retrieved encrypted data from Arkiv, decrypted with key.`)
+                        addCrudLog('READ', 'success', `Found ${allMessages.length} total messages (${testMessages.length} test). Retrieved encrypted data from Arkiv and decrypted.`, latest.entityKey)
+                      } else {
+                        setTestStatus(`ℹ️ Found ${allMessages.length} total message(s) but no test messages. All messages displayed below.`)
+                        addCrudLog('READ', 'success', `Found ${allMessages.length} messages (no test messages)`)
+                      }
+                    } else {
+                      setTestStatus(`❌ Read failed: ${result.error}`)
+                      addCrudLog('READ', 'error', `Test read failed: ${result.error}`)
+                    }
+                  } catch (error: any) {
+                    setTestStatus(`❌ Read failed: ${error.message}`)
+                    addCrudLog('READ', 'error', `Test read failed: ${error.message}`)
+                  }
+                }}
+                className="px-4 py-2 bg-cyan-700 hover:bg-cyan-600 rounded text-sm"
+              >
+                📖 Read from Arkiv
+              </button>
+              
+              <button
+                onClick={() => {
+                  setTestInput('')
+                  setTestOutput('')
+                  setTestStatus('')
+                  setTestEntityKey(null)
+                  setTestEntityData(null)
+                  setTestEncryptedData(null)
+                  setTestDecryptedData(null)
+                }}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm"
+              >
+                🗑️ Clear
+              </button>
+            </div>
+            
+            {/* Entity Key and Data Display */}
+            {testEntityKey && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">Full Entity Key:</label>
+                  <div className="flex items-center gap-2">
+                    <p className="font-mono text-xs bg-slate-900/50 p-3 rounded border border-slate-700 break-all flex-1">
+                      {testEntityKey}
+                    </p>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(testEntityKey)
+                        setTestStatus('✅ Entity key copied to clipboard')
+                      }}
+                      className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm"
+                    >
+                      📋 Copy
+                    </button>
+                  </div>
+                </div>
+                
+                {testEntityData && (
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-2">All Entity Data:</label>
+                    <pre className="w-full bg-slate-900/50 border border-slate-700 rounded-lg p-3 text-slate-300 font-mono text-xs overflow-auto max-h-60">
+                      {JSON.stringify(testEntityData, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* Encrypted/Decrypted Content Display */}
+            {(testEncryptedData || testDecryptedData) && (
+              <div className="space-y-3">
+                {testEncryptedData && (
+                  <div>
+                    <label className="block text-sm text-blue-400 mb-2">🔒 Encrypted Content (stored in Arkiv):</label>
+                    <textarea
+                      value={testEncryptedData}
+                      readOnly
+                      className="w-full bg-blue-900/20 border border-blue-700/50 rounded-lg p-3 text-blue-300 font-mono text-xs resize-none break-all"
+                      rows={4}
+                    />
+                  </div>
+                )}
+                
+                {testDecryptedData && (
+                  <div>
+                    <label className="block text-sm text-green-400 mb-2">🔓 Decrypted Content (after decryption with key):</label>
+                    <textarea
+                      value={testDecryptedData}
+                      readOnly
+                      className="w-full bg-green-900/20 border border-green-700/50 rounded-lg p-3 text-green-300 font-mono text-xs resize-none break-all"
+                      rows={4}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {testOutput && !testEncryptedData && (
+              <div>
+                <label className="block text-sm text-slate-400 mb-2">Encrypted Output:</label>
+                <textarea
+                  value={testOutput}
+                  readOnly
+                  className="w-full bg-slate-900/50 border border-slate-700 rounded-lg p-3 text-slate-300 font-mono text-xs resize-none break-all"
+                  rows={4}
+                />
+              </div>
+            )}
+            
+            {testStatus && (
+              <div className={`p-3 rounded-lg ${
+                testStatus.includes('✅') ? 'bg-green-900/30 border border-green-700/50' :
+                testStatus.includes('❌') ? 'bg-red-900/30 border border-red-700/50' :
+                'bg-blue-900/30 border border-blue-700/50'
+              }`}>
+                <p className={`text-sm ${
+                  testStatus.includes('✅') ? 'text-green-300' :
+                  testStatus.includes('❌') ? 'text-red-300' :
+                  'text-blue-300'
+                }`}>
+                  {testStatus}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Read Messages from Arkiv Display */}
+        {readMessages.length > 0 && (
+          <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-lg p-6">
+            <h2 className="text-xl font-semibold mb-4">
+              📖 Messages Read from Arkiv ({readMessages.length})
+            </h2>
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {readMessages.map((msg, i) => (
+                <div key={i} className="bg-slate-900/50 border border-slate-600 rounded-lg p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <p className="text-xs text-slate-500">
+                      {new Date(msg.timestamp).toLocaleString()}
+                    </p>
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      msg.encrypted ? 'bg-blue-900/30 text-blue-400' : 'bg-yellow-900/30 text-yellow-400'
+                    }`}>
+                      {msg.encrypted ? '🔒 Encrypted' : '⚠️ Not Encrypted'}
+                    </span>
+                  </div>
+                  
+                  <div className="mb-2">
+                    <p className="text-xs text-slate-400 mb-1">Full Entity Key:</p>
+                    <p className="font-mono text-xs bg-slate-800/50 p-2 rounded border border-slate-700 break-all">
+                      {msg.entityKey}
+                    </p>
+                  </div>
+                  
+                  {msg.encrypted && msg.encryptedData && (
+                    <div className="mb-2">
+                      <p className="text-xs text-blue-400 mb-1">🔒 Encrypted Content (stored in Arkiv):</p>
+                      <textarea
+                        value={msg.encryptedData}
+                        readOnly
+                        className="w-full bg-blue-900/20 border border-blue-700/50 rounded-lg p-2 text-blue-300 font-mono text-xs resize-none break-all"
+                        rows={3}
+                      />
+                    </div>
+                  )}
+                  
+                  {msg.encrypted && msg.decryptedData && (
+                    <div className="mb-2">
+                      <p className="text-xs text-green-400 mb-1">🔓 Decrypted Content (after decryption with key):</p>
+                      <textarea
+                        value={msg.decryptedData}
+                        readOnly
+                        className="w-full bg-green-900/20 border border-green-700/50 rounded-lg p-2 text-green-300 font-mono text-xs resize-none break-all"
+                        rows={3}
+                      />
+                    </div>
+                  )}
+                  
+                  <div className="mb-2">
+                    <p className="text-xs text-slate-400 mb-1">Message Content (Decrypted):</p>
+                    <p className="font-mono text-sm text-white bg-slate-800/50 p-2 rounded border border-slate-700">
+                      {msg.data?.content || 'N/A'}
+                    </p>
+                  </div>
+                  
+                  <details className="mt-2">
+                    <summary className="text-xs text-slate-400 cursor-pointer hover:text-slate-300">
+                      View All Data
+                    </summary>
+                    <pre className="mt-2 p-2 bg-slate-800/50 rounded text-xs overflow-auto max-h-40 border border-slate-700">
+                      {JSON.stringify(msg.data, null, 2)}
+                    </pre>
+                  </details>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => setReadMessages([])}
+              className="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm"
+            >
+              Clear Read Messages
+            </button>
+          </div>
+        )}
+
         {/* Credentials Card */}
         {credentials && (
           <div className="bg-gradient-to-br from-purple-900/50 to-pink-900/50 backdrop-blur border border-purple-500 rounded-lg p-6">
@@ -435,9 +777,9 @@ export default function ServerPage() {
                       {new Date(msg.timestamp).toLocaleString()}
                     </p>
                     <div className="flex items-center space-x-2">
-                      <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded">
-                        New
-                      </span>
+                    <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded">
+                      New
+                    </span>
                       {/* Arkiv Storage Status Badge */}
                       {msg.arkivStatus === 'storing' && (
                         <span className="text-xs bg-blue-900/30 text-blue-400 px-2 py-1 rounded flex items-center">
