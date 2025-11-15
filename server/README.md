@@ -222,12 +222,51 @@ lsof -ti:4000 | xargs kill
 "dev": "next dev -p 5000"
 ```
 
+## Arkiv Storage Integration
+
+The server now automatically stores all received messages to Arkiv decentralized storage.
+
+### Setup
+
+1. Create a `.env.local` file in the `server/` directory:
+```bash
+# Required
+NEXT_PUBLIC_ARKIV_PRIVATE_KEY=0x...  # Your Arkiv private key (TEST key recommended, without 0x prefix or with it)
+
+# Optional (defaults provided)
+NEXT_PUBLIC_ARKIV_RPC_URL=https://mendoza.hoodi.arkiv.network/rpc
+NEXT_PUBLIC_ARKIV_WS_URL=wss://mendoza.hoodi.arkiv.network/rpc/ws
+NEXT_PUBLIC_ARKIV_CHAIN_ID=60138453056  # Mendoza testnet chain ID
+```
+
+2. The server will automatically:
+   - Initialize Arkiv client on startup (using the same API as demo.ts)
+   - Store each received message to Arkiv with metadata
+   - Messages expire after 7 days (configurable in `lib/arkiv.ts`)
+
+### Message Storage
+
+Each message is stored with the following attributes:
+- `type`: "xx-network-message"
+- `source`: "ghostmesh-server"
+- `timestamp`: Message timestamp (numeric)
+- `created`: Storage timestamp (numeric)
+- `uuid`: XX Network message UUID (if available)
+- `from`: Sender public key (first 20 chars)
+
+### Notes
+
+- Arkiv storage is **non-blocking** - if it fails, message receiving continues normally
+- Check browser console for Arkiv storage status
+- If private key is not configured, messages will still be received but not stored to Arkiv
+
 ## Next Steps
 
 - [x] Server initializes xxdk-wasm
 - [x] Generates real credentials
 - [x] Displays beautiful UI
 - [x] Receives messages
+- [x] Stores messages to Arkiv
 - [ ] Add WebSocket for real-time API
 - [ ] Add database for message persistence
 - [ ] Add authentication

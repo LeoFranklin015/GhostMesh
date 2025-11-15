@@ -2,14 +2,56 @@
 
 import { useEffect, useState, useRef } from 'react'
 import Dexie from 'dexie'
+import { 
+  initializeArkivClient, 
+  storeMessageToArkiv,
+  readMessagesFromArkiv,
+  updateMessageInArkiv,
+  deleteMessageFromArkiv,
+  extendMessageInArkiv
+} from '../lib/arkiv'
 
 export default function ServerPage() {
   const [status, setStatus] = useState('🔄 Initializing...')
   const [credentials, setCredentials] = useState<{token: number, publicKey: string} | null>(null)
-  const [messages, setMessages] = useState<Array<{timestamp: string, from: string, message: string}>>([])
+  const [messages, setMessages] = useState<Array<{
+    timestamp: string
+    from: string
+    message: string
+    arkivStatus?: 'storing' | 'stored' | 'failed'
+    arkivEntityKey?: string
+    arkivError?: string
+  }>>([])
+  const [arkivStatus, setArkivStatus] = useState<'initializing' | 'ready' | 'not-configured' | 'error'>('initializing')
+  const [crudLogs, setCrudLogs] = useState<Array<{
+    timestamp: string
+    operation: 'CREATE' | 'READ' | 'UPDATE' | 'DELETE' | 'EXTEND'
+    status: 'success' | 'error'
+    message: string
+    entityKey?: string
+    details?: any
+  }>>([])
   const [error, setError] = useState<string | null>(null)
   const dmDB = useRef<Dexie | null>(null)
   const cipherRef = useRef<any>(null)
+
+  // Helper to add CRUD log
+  const addCrudLog = (
+    operation: 'CREATE' | 'READ' | 'UPDATE' | 'DELETE' | 'EXTEND',
+    status: 'success' | 'error',
+    message: string,
+    entityKey?: string,
+    details?: any
+  ) => {
+    setCrudLogs(prev => [{
+      timestamp: new Date().toISOString(),
+      operation,
+      status,
+      message,
+      entityKey,
+      details
+    }, ...prev].slice(0, 50)) // Keep last 50 logs
+  }
 
   useEffect(() => {
     initializeServer()
@@ -56,6 +98,21 @@ export default function ServerPage() {
       }
       
       setStatus('✅ CMix client loaded')
+      
+      // Initialize Arkiv client (non-blocking)
+      setStatus('🔄 Initializing Arkiv storage...')
+      initializeArkivClient().then((success) => {
+        if (success) {
+          console.log('✅ Arkiv storage ready')
+          setArkivStatus('ready')
+        } else {
+          console.log('⚠️ Arkiv storage not available (check environment variables)')
+          setArkivStatus('not-configured')
+        }
+      }).catch((err) => {
+        console.error('⚠️ Arkiv initialization error:', err)
+        setArkivStatus('error')
+      })
       
       setStatus('🔄 Setting up Direct Messaging...')
       
@@ -142,11 +199,63 @@ export default function ServerPage() {
                   
                   console.log('✅ Decrypted message:', decryptedText)
                   
+                  const timestamp = new Date().toISOString()
+                  const fromPublicKey = e.pubKey ? e.pubKey.substring(0, 20) + '...' : 'unknown'
+                  
+                  // Store message in state with Arkiv status (existing functionality + new)
                   setMessages(prev => [...prev, {
-                    timestamp: new Date().toISOString(),
-                    from: e.pubKey ? e.pubKey.substring(0, 20) + '...' : 'unknown',
-                    message: `📩 ${decryptedText}`
+                    timestamp,
+                    from: fromPublicKey,
+                    message: `📩 ${decryptedText}`,
+                    arkivStatus: 'storing'
                   }])
+                  
+                  // Store message to Arkiv (new functionality - non-blocking)
+                  storeMessageToArkiv({
+                    content: decryptedText,
+                    from: e.pubKey || 'unknown',
+                    timestamp,
+                    uuid: e.uuid
+                  }).then((result) => {
+                    // Update message with Arkiv storage result (find by timestamp)
+                    setMessages(prev => {
+                      return prev.map(msg => {
+                        if (msg.timestamp === timestamp && msg.arkivStatus === 'storing') {
+                          return {
+                            ...msg,
+                            arkivStatus: result.success ? 'stored' : 'failed',
+                            arkivEntityKey: result.entityKey,
+                            arkivError: result.error
+                          }
+                        }
+                        return msg
+                      })
+                    })
+                    
+                    if (result.success) {
+                      console.log('✅ Message stored to Arkiv in UI:', result.entityKey)
+                      addCrudLog('CREATE', 'success', `Message stored to Arkiv`, result.entityKey)
+                    } else {
+                      console.warn('⚠️ Arkiv storage failed in UI:', result.error)
+                      addCrudLog('CREATE', 'error', `Storage failed: ${result.error}`)
+                    }
+                  }).catch((err) => {
+                    // Update message with error status (find by timestamp)
+                    setMessages(prev => {
+                      return prev.map(msg => {
+                        if (msg.timestamp === timestamp && msg.arkivStatus === 'storing') {
+                          return {
+                            ...msg,
+                            arkivStatus: 'failed',
+                            arkivError: err.message || String(err)
+                          }
+                        }
+                        return msg
+                      })
+                    })
+                    console.error('⚠️ Arkiv storage failed (non-critical):', err)
+                    addCrudLog('CREATE', 'error', `Storage failed: ${err.message || String(err)}`)
+                  })
                 }).catch((err) => {
                   console.error('❌ Error querying/decrypting message:', err)
                   if (attempt < maxAttempts) {
@@ -259,6 +368,24 @@ export default function ServerPage() {
             <p className="font-mono text-sm">{status}</p>
           </div>
           
+          {/* Arkiv Status */}
+          <div className="mt-4 flex items-center space-x-3">
+            <div className={`w-3 h-3 rounded-full ${
+              arkivStatus === 'ready' ? 'bg-green-500' :
+              arkivStatus === 'not-configured' ? 'bg-yellow-500' :
+              arkivStatus === 'error' ? 'bg-red-500' :
+              'bg-gray-500 animate-pulse'
+            }`} />
+            <p className="text-sm text-slate-300">
+              Arkiv Storage: {
+                arkivStatus === 'ready' ? '✅ Ready' :
+                arkivStatus === 'not-configured' ? '⚠️ Not configured' :
+                arkivStatus === 'error' ? '❌ Error' :
+                '🔄 Initializing...'
+              }
+            </p>
+          </div>
+          
           {error && (
             <div className="mt-4 p-4 bg-red-900/30 border border-red-500 rounded-lg">
               <p className="text-red-400 text-sm">{error}</p>
@@ -307,15 +434,236 @@ export default function ServerPage() {
                     <p className="text-xs text-slate-500">
                       {new Date(msg.timestamp).toLocaleString()}
                     </p>
-                    <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded">
-                      New
-                    </span>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded">
+                        New
+                      </span>
+                      {/* Arkiv Storage Status Badge */}
+                      {msg.arkivStatus === 'storing' && (
+                        <span className="text-xs bg-blue-900/30 text-blue-400 px-2 py-1 rounded flex items-center">
+                          <span className="w-2 h-2 bg-blue-400 rounded-full mr-1 animate-pulse"></span>
+                          Storing...
+                        </span>
+                      )}
+                      {msg.arkivStatus === 'stored' && (
+                        <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded flex items-center">
+                          ✅ Stored
+                        </span>
+                      )}
+                      {msg.arkivStatus === 'failed' && (
+                        <span className="text-xs bg-red-900/30 text-red-400 px-2 py-1 rounded flex items-center">
+                          ❌ Storage Failed
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <p className="text-xs text-slate-400 mb-1">From: {msg.from.substring(0, 20)}...</p>
-                  <p className="font-mono text-sm">{msg.message}</p>
+                  <p className="font-mono text-sm mb-2">{msg.message}</p>
+                  
+                  {/* Arkiv Storage Details */}
+                  {msg.arkivStatus === 'stored' && msg.arkivEntityKey && (
+                    <div className="mt-2 p-2 bg-green-900/20 border border-green-700/50 rounded text-xs">
+                      <p className="text-green-400 mb-2">
+                        <strong>Arkiv:</strong> Stored successfully
+                      </p>
+                      <div className="flex items-center gap-2 mb-2">
+                        <p className="text-green-300 font-mono text-xs break-all flex-1">
+                          <strong>Entity Key:</strong> {msg.arkivEntityKey}
+                        </p>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(msg.arkivEntityKey || '')
+                            addCrudLog('READ', 'success', 'Entity key copied to clipboard', msg.arkivEntityKey)
+                          }}
+                          className="px-2 py-1 bg-green-700/50 hover:bg-green-700 rounded text-xs"
+                          title="Copy entity key"
+                        >
+                          📋 Copy
+                        </button>
+                      </div>
+                      
+                      {/* CRUD Operation Buttons */}
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <button
+                          onClick={async () => {
+                            if (!msg.arkivEntityKey) return
+                            addCrudLog('READ', 'success', 'Reading all messages from Arkiv...', msg.arkivEntityKey)
+                            const result = await readMessagesFromArkiv('type = "xx-network-message"')
+                            if (result.success) {
+                              const foundEntity = result.entities?.find((e: any) => e.entityKey === msg.arkivEntityKey)
+                              if (foundEntity) {
+                                addCrudLog('READ', 'success', `Found entity in Arkiv`, msg.arkivEntityKey, foundEntity)
+                              } else {
+                                addCrudLog('READ', 'success', `Found ${result.entities?.length || 0} total messages. This entity not found.`, msg.arkivEntityKey, result.entities)
+                              }
+                            } else {
+                              addCrudLog('READ', 'error', result.error || 'Read failed', msg.arkivEntityKey)
+                            }
+                          }}
+                          className="px-2 py-1 bg-blue-700/50 hover:bg-blue-700 rounded text-xs"
+                          title="Read entity from Arkiv"
+                        >
+                          📖 Read
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!msg.arkivEntityKey) return
+                            const newContent = prompt('Enter updated message content:', msg.message.replace('📩 ', ''))
+                            if (newContent) {
+                              addCrudLog('UPDATE', 'success', 'Updating entity...', msg.arkivEntityKey)
+                              const result = await updateMessageInArkiv(msg.arkivEntityKey, {
+                                type: "xx-network-message",
+                                content: newContent,
+                                from: msg.from,
+                                timestamp: msg.timestamp,
+                                source: 'ghostmesh-server',
+                                updated: true
+                              })
+                              if (result.success) {
+                                addCrudLog('UPDATE', 'success', 'Entity updated successfully', result.entityKey)
+                                setMessages(prev => prev.map(m => 
+                                  m.arkivEntityKey === msg.arkivEntityKey 
+                                    ? { ...m, message: `📩 ${newContent}` }
+                                    : m
+                                ))
+                              } else {
+                                addCrudLog('UPDATE', 'error', result.error || 'Update failed', msg.arkivEntityKey)
+                              }
+                            }
+                          }}
+                          className="px-2 py-1 bg-yellow-700/50 hover:bg-yellow-700 rounded text-xs"
+                          title="Update entity in Arkiv"
+                        >
+                          ✏️ Update
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!msg.arkivEntityKey) return
+                            if (confirm('Are you sure you want to delete this entity from Arkiv?')) {
+                              addCrudLog('DELETE', 'success', 'Deleting entity...', msg.arkivEntityKey)
+                              const result = await deleteMessageFromArkiv(msg.arkivEntityKey)
+                              if (result.success) {
+                                addCrudLog('DELETE', 'success', 'Entity deleted successfully', result.entityKey)
+                                setMessages(prev => prev.map(m => 
+                                  m.arkivEntityKey === msg.arkivEntityKey 
+                                    ? { ...m, arkivStatus: 'failed', arkivError: 'Deleted from Arkiv' }
+                                    : m
+                                ))
+                              } else {
+                                addCrudLog('DELETE', 'error', result.error || 'Delete failed', msg.arkivEntityKey)
+                              }
+                            }
+                          }}
+                          className="px-2 py-1 bg-red-700/50 hover:bg-red-700 rounded text-xs"
+                          title="Delete entity from Arkiv"
+                        >
+                          🗑️ Delete
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!msg.arkivEntityKey) return
+                            const hours = prompt('Extend by how many hours? (default: 12)', '12')
+                            if (hours) {
+                              const blocks = parseInt(hours) * 3600 // Convert hours to seconds
+                              addCrudLog('EXTEND', 'success', `Extending entity by ${hours} hours...`, msg.arkivEntityKey)
+                              const result = await extendMessageInArkiv(msg.arkivEntityKey, blocks)
+                              if (result.success) {
+                                addCrudLog('EXTEND', 'success', `Entity extended successfully. New expiration block: ${result.newExpirationBlock}`, result.entityKey, { newExpirationBlock: result.newExpirationBlock })
+                              } else {
+                                addCrudLog('EXTEND', 'error', result.error || 'Extend failed', msg.arkivEntityKey)
+                              }
+                            }
+                          }}
+                          className="px-2 py-1 bg-purple-700/50 hover:bg-purple-700 rounded text-xs"
+                          title="Extend entity lifetime in Arkiv"
+                        >
+                          ⏰ Extend
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {msg.arkivStatus === 'failed' && msg.arkivError && (
+                    <div className="mt-2 p-2 bg-red-900/20 border border-red-700/50 rounded text-xs">
+                      <p className="text-red-400">
+                        <strong>Arkiv:</strong> Storage failed
+                      </p>
+                      <p className="text-red-300 text-xs mt-1">
+                        {msg.arkivError}
+                      </p>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* CRUD Operations Log */}
+        {crudLogs.length > 0 && (
+          <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-lg p-6">
+            <h2 className="text-xl font-semibold mb-4">
+              📋 Arkiv CRUD Operations Log ({crudLogs.length})
+            </h2>
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {crudLogs.map((log, i) => (
+                <div 
+                  key={i} 
+                  className={`p-3 rounded-lg border text-xs ${
+                    log.status === 'success' 
+                      ? 'bg-green-900/20 border-green-700/50' 
+                      : 'bg-red-900/20 border-red-700/50'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                        log.operation === 'CREATE' ? 'bg-blue-900/50 text-blue-300' :
+                        log.operation === 'READ' ? 'bg-cyan-900/50 text-cyan-300' :
+                        log.operation === 'UPDATE' ? 'bg-yellow-900/50 text-yellow-300' :
+                        log.operation === 'DELETE' ? 'bg-red-900/50 text-red-300' :
+                        'bg-purple-900/50 text-purple-300'
+                      }`}>
+                        {log.operation}
+                      </span>
+                      <span className={`px-2 py-1 rounded text-xs ${
+                        log.status === 'success' 
+                          ? 'bg-green-900/50 text-green-300' 
+                          : 'bg-red-900/50 text-red-300'
+                      }`}>
+                        {log.status === 'success' ? '✅ Success' : '❌ Error'}
+                      </span>
+                    </div>
+                    <p className="text-slate-500 text-xs">
+                      {new Date(log.timestamp).toLocaleTimeString()}
+                    </p>
+                  </div>
+                  <p className={`text-sm mb-1 ${
+                    log.status === 'success' ? 'text-green-300' : 'text-red-300'
+                  }`}>
+                    {log.message}
+                  </p>
+                  {log.entityKey && (
+                    <p className="text-slate-400 font-mono text-xs break-all">
+                      Entity Key: {log.entityKey}
+                    </p>
+                  )}
+                  {log.details && (
+                    <details className="mt-2">
+                      <summary className="text-slate-400 cursor-pointer text-xs">View Details</summary>
+                      <pre className="mt-2 p-2 bg-slate-900/50 rounded text-xs overflow-auto">
+                        {JSON.stringify(log.details, null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => setCrudLogs([])}
+              className="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm"
+            >
+              Clear Logs
+            </button>
           </div>
         )}
 
