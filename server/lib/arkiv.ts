@@ -1,34 +1,23 @@
 /**
  * Arkiv Storage Utility
  * Handles storing received messages to Arkiv decentralized storage
- * Uses the new @arkiv-network/sdk API
+ * Uses the new @arkiv-network/sdk API with private key authentication
  * Includes encryption layer before storing to Arkiv
  */
 
-import { createWalletClient, createPublicClient, custom, http } from "@arkiv-network/sdk"
+import { createWalletClient, createPublicClient, http } from "@arkiv-network/sdk"
 import { mendoza } from "@arkiv-network/sdk/chains"
 import { ExpirationTime, jsonToPayload } from "@arkiv-network/sdk/utils"
 import { eq } from "@arkiv-network/sdk/query"
-import { toAccount } from "@arkiv-network/sdk/accounts"
-
-// Extend Window interface for MetaMask
-declare global {
-  interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: any[] }) => Promise<any>
-      on: (event: string, handler: (accounts: string[]) => void) => void
-      removeListener: (event: string, handler: (accounts: string[]) => void) => void
-    }
-  }
-}
+import { privateKeyToAccount } from "@arkiv-network/sdk/accounts"
 
 // Default expiration: 30 days (2592000 seconds = 720 hours)
 const DEFAULT_EXPIRATION_HOURS = 720
 
+// Client state
 let walletClient: any = null
 let publicClient: any = null
 let isInitialized = false
-let connectedAccount: string | null = null
 
 // Encryption key (will be generated or loaded from env)
 let encryptionKey: CryptoKey | null = null
@@ -135,8 +124,10 @@ export async function getEncryptionKey(): Promise<string> {
     return encryptionKeyString
   }
 
-  // Try to get from environment variable
-  const envKey = process.env.NEXT_PUBLIC_MESSAGE_ENCRYPTION_KEY
+  // Try to get from environment variable (works in both browser and server)
+  // In browser: NEXT_PUBLIC_ prefix is needed
+  // In server: Can use either NEXT_PUBLIC_ or without prefix
+  const envKey = process.env.NEXT_PUBLIC_MESSAGE_ENCRYPTION_KEY || process.env.MESSAGE_ENCRYPTION_KEY
   
   if (envKey) {
     try {
@@ -258,125 +249,93 @@ export async function decryptData(encryptedData: string): Promise<string> {
 }
 
 /**
- * Add Arkiv Network to MetaMask
- */
-export async function addArkivNetworkToMetaMask(): Promise<boolean> {
-  if (typeof window === 'undefined' || typeof window.ethereum === 'undefined') {
-    console.warn('⚠️ MetaMask not detected')
-    return false
-  }
-
-  try {
-    await window.ethereum.request({
-      method: 'wallet_addEthereumChain',
-      params: [{
-        chainId: '0xe0087f840', // 60138453056 in hex
-        chainName: 'Arkiv Mendoza Testnet',
-        nativeCurrency: {
-          name: 'ETH',
-          symbol: 'ETH',
-          decimals: 18
-        },
-        rpcUrls: ['https://mendoza.hoodi.arkiv.network/rpc'],
-        blockExplorerUrls: ['https://explorer.mendoza.hoodi.arkiv.network']
-      }]
-    })
-    console.log('✅ Arkiv network added to MetaMask')
-    return true
-  } catch (error: any) {
-    // Network might already be added, which is fine
-    if (error.code === 4902) {
-      console.log('ℹ️ Arkiv network already added to MetaMask')
-      return true
-    }
-    console.error('❌ Failed to add Arkiv network:', error)
-    return false
-  }
-}
-
-/**
- * Connect to MetaMask and initialize Arkiv client
- * Returns true if successful, false otherwise
- */
-export async function connectMetaMask(): Promise<boolean> {
-  if (typeof window === 'undefined' || typeof window.ethereum === 'undefined') {
-    console.warn('⚠️ MetaMask not detected. Please install MetaMask extension.')
-    return false
-  }
-
-  try {
-    // Add Arkiv network to MetaMask first
-    await addArkivNetworkToMetaMask()
-
-    // Request account access from MetaMask
-    const accounts = await window.ethereum.request({ 
-      method: 'eth_requestAccounts' 
-    })
-
-    if (!accounts || accounts.length === 0) {
-      console.warn('⚠️ No accounts found in MetaMask')
-      return false
-    }
-
-    connectedAccount = accounts[0]
-    console.log('✅ Connected to MetaMask account:', connectedAccount)
-
-    // Create account object from MetaMask address
-    // This ensures the wallet client has the account available for signing
-    const account = toAccount(connectedAccount as `0x${string}`)
-
-    // Create wallet client with MetaMask provider (for write operations)
-    // Pass the account explicitly to ensure it's available for transactions
-    walletClient = createWalletClient({
-      chain: mendoza,
-      transport: custom(window.ethereum), // Use MetaMask for signing
-      account: account, // Explicitly set the account
-    })
-    
-    console.log('✅ Wallet client created with MetaMask transport and account:', connectedAccount)
-
-    // Create public client for read operations (no wallet needed)
-    publicClient = createPublicClient({
-      chain: mendoza,
-      transport: http(), // Use public RPC
-    })
-
-    isInitialized = true
-    console.log('✅ Arkiv clients initialized successfully with MetaMask')
-    return true
-  } catch (error: any) {
-    console.error('❌ Failed to connect MetaMask:', error.message)
-    return false
-  }
-}
-
-/**
- * Initialize Arkiv client (legacy function for backward compatibility)
- * Now uses MetaMask instead of private key
+ * Initialize Arkiv client with private key
+ * Uses private key from environment variable for all operations
  * Returns true if successful, false otherwise
  */
 export async function initializeArkivClient(): Promise<boolean> {
+  // If already initialized, return true
   if (isInitialized && walletClient && publicClient) {
+    console.log('✅ [INIT] Already initialized')
     return true
   }
-
-  // Try to connect with MetaMask
-  return await connectMetaMask()
+  
+  return await initializeArkivClientWithPrivateKey()
 }
 
 /**
- * Get connected MetaMask account
+ * Initialize Arkiv client with private key
  */
-export function getConnectedAccount(): string | null {
-  return connectedAccount
+async function initializeArkivClientWithPrivateKey(): Promise<boolean> {
+  try {
+    console.log('🔄 [INIT] Initializing Arkiv client with private key...')
+    
+    // Detect if we're in browser (client-side) or server-side
+    const isBrowser = typeof window !== 'undefined'
+    
+    // Get private key from environment variable
+    // In browser: Only NEXT_PUBLIC_* vars are available
+    // In server: Both ARKIV_PRIVATE_KEY and NEXT_PUBLIC_ARKIV_PRIVATE_KEY work
+    let privateKey: string | undefined
+    if (isBrowser) {
+      // Browser: Only NEXT_PUBLIC_ prefix works
+      privateKey = process.env.NEXT_PUBLIC_ARKIV_PRIVATE_KEY
+      console.log('🌐 [INIT] Browser context detected - using NEXT_PUBLIC_ARKIV_PRIVATE_KEY')
+    } else {
+      // Server: Prefer ARKIV_PRIVATE_KEY (more secure), fallback to NEXT_PUBLIC_ARKIV_PRIVATE_KEY
+      privateKey = process.env.ARKIV_PRIVATE_KEY || process.env.NEXT_PUBLIC_ARKIV_PRIVATE_KEY
+      console.log('🖥️ [INIT] Server context detected - using ARKIV_PRIVATE_KEY or NEXT_PUBLIC_ARKIV_PRIVATE_KEY')
+    }
+
+    if (!privateKey) {
+      const envVarName = isBrowser ? 'NEXT_PUBLIC_ARKIV_PRIVATE_KEY' : 'ARKIV_PRIVATE_KEY or NEXT_PUBLIC_ARKIV_PRIVATE_KEY'
+      const errorMsg = `⚠️ Private key not configured. Please set ${envVarName} in your .env.local file.`
+      console.error('❌ [INIT]', errorMsg)
+      console.error('❌ [INIT] Context:', { isBrowser, isServer: !isBrowser })
+      console.error('❌ [INIT] Available env vars:', {
+        hasARKIV_PRIVATE_KEY: !!process.env.ARKIV_PRIVATE_KEY,
+        hasNEXT_PUBLIC_ARKIV_PRIVATE_KEY: !!process.env.NEXT_PUBLIC_ARKIV_PRIVATE_KEY,
+      })
+      console.error('❌ [INIT] Note: In browser/client components, only NEXT_PUBLIC_* variables are accessible.')
+      return false
+    }
+
+    console.log('✅ [INIT] Private key found (length):', privateKey.length)
+    console.log('✅ [INIT] Private key preview:', privateKey.substring(0, 10) + '...')
+
+    // Create account from private key
+    console.log('🔄 [INIT] Creating account from private key...')
+    const account = privateKeyToAccount(privateKey as `0x${string}`)
+    console.log('✅ [INIT] Account created:', account.address)
+
+    // Create wallet client with private key
+    console.log('🔄 [INIT] Creating wallet client...')
+    walletClient = createWalletClient({
+      chain: mendoza,
+      transport: http(),
+      account: account,
+    })
+    console.log('✅ [INIT] Wallet client created')
+
+    // Create public client for read operations
+    console.log('🔄 [INIT] Creating public client...')
+    publicClient = createPublicClient({
+      chain: mendoza,
+      transport: http(),
+    })
+    console.log('✅ [INIT] Public client created')
+
+    isInitialized = true
+    console.log('✅ [INIT] Arkiv clients initialized successfully with private key')
+    return true
+  } catch (error: any) {
+    console.error('❌ [INIT] Failed to initialize Arkiv client:', error)
+    console.error('❌ [INIT] Error details:', error.message)
+    console.error('❌ [INIT] Error stack:', error.stack)
+    return false
+  }
 }
 
-/**
- * Check if MetaMask is available
- */
-export function isMetaMaskAvailable(): boolean {
-  return typeof window !== 'undefined' && typeof window.ethereum !== 'undefined'
-}
 
 /**
  * Generate UUID for browser environment (replacement for crypto.randomUUID)
@@ -494,37 +453,20 @@ export async function storeMessageToArkiv(
     }
     console.log('✅ [CREATE] Final verification passed - encrypted content confirmed in payload')
 
-    // Verify account is available before creating entity
-    // When using custom(window.ethereum), the account should be auto-detected
-    // But we need to ensure MetaMask is connected
-    if (typeof window === 'undefined' || !window.ethereum) {
-      return { success: false, error: 'MetaMask not available. Please install and connect MetaMask.' }
-    }
-    
-    // Check if account is connected in MetaMask
-    const accounts = await window.ethereum.request({ method: 'eth_accounts' })
-    if (!accounts || accounts.length === 0) {
-      return { success: false, error: 'No MetaMask account connected. Please connect MetaMask first by clicking "Connect MetaMask" button.' }
-    }
-    
-    console.log('✅ Account verified for storage:', accounts[0])
-    
-    // Ensure wallet client is properly initialized with account
-    // The account should be automatically available when using custom(window.ethereum)
-    // But we verify it's accessible
+    // Ensure wallet client is properly initialized
     if (!walletClient) {
-      return { success: false, error: 'Wallet client not initialized. Please connect MetaMask first.' }
+      return { success: false, error: 'Wallet client not initialized. Please check ARKIV_PRIVATE_KEY environment variable.' }
     }
-
-    // Generate entity ID
-    const entityId = generateUUID()
 
     // Verify account is set on wallet client
     if (!walletClient.account) {
-      return { success: false, error: 'Account not set on wallet client. Please reconnect MetaMask.' }
+      return { success: false, error: 'Account not set on wallet client. Please check ARKIV_PRIVATE_KEY environment variable.' }
     }
     
     console.log('✅ Using account for storage:', walletClient.account.address)
+
+    // Generate entity ID
+    const entityId = generateUUID()
 
     // Create entity using new SDK API
     // The account is explicitly set on the wallet client, so it should work
@@ -562,12 +504,29 @@ export async function readMessagesFromArkiv(
   query: string = 'type = "xx-network-message"'
 ): Promise<{ success: boolean; entities?: any[]; error?: string }> {
   try {
+    console.log('📖 [READ] Starting read operation...')
+    console.log('📖 [READ] Client status:', { isInitialized, hasPublicClient: !!publicClient, hasWalletClient: !!walletClient })
+    
     if (!isInitialized || !publicClient) {
+      console.log('📖 [READ] Client not initialized, initializing now...')
       const initialized = await initializeArkivClient()
+      console.log('📖 [READ] Initialization result:', initialized)
+      
       if (!initialized) {
-        return { success: false, error: 'Arkiv client not initialized' }
+        const errorMsg = 'Arkiv client not initialized. Please check ARKIV_PRIVATE_KEY environment variable.'
+        console.error('❌ [READ]', errorMsg)
+        return { success: false, error: errorMsg }
+      }
+      
+      // Double check after initialization
+      if (!publicClient) {
+        const errorMsg = 'Public client not available after initialization'
+        console.error('❌ [READ]', errorMsg)
+        return { success: false, error: errorMsg }
       }
     }
+    
+    console.log('✅ [READ] Client ready, proceeding with query...')
 
     // Build query using new SDK API
     const queryBuilder = publicClient.buildQuery()

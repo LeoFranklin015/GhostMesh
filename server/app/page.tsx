@@ -4,9 +4,6 @@ import { useEffect, useState, useRef } from 'react'
 import Dexie from 'dexie'
 import { 
   initializeArkivClient,
-  connectMetaMask,
-  getConnectedAccount,
-  isMetaMaskAvailable,
   storeMessageToArkiv,
   readMessagesFromArkiv,
   updateMessageInArkiv,
@@ -26,8 +23,7 @@ export default function ServerPage() {
     arkivEntityKey?: string
     arkivError?: string
   }>>([])
-  const [arkivStatus, setArkivStatus] = useState<'initializing' | 'ready' | 'not-configured' | 'error' | 'connecting'>('initializing')
-  const [metaMaskAccount, setMetaMaskAccount] = useState<string | null>(null)
+  const [arkivStatus, setArkivStatus] = useState<'initializing' | 'ready' | 'not-configured' | 'error'>('initializing')
   const [testInput, setTestInput] = useState<string>('')
   const [testOutput, setTestOutput] = useState<string>('')
   const [testStatus, setTestStatus] = useState<string>('')
@@ -129,33 +125,19 @@ export default function ServerPage() {
         console.error('⚠️ Encryption key initialization error:', err)
       })
       
-      // Check MetaMask availability and initialize Arkiv client
-      if (isMetaMaskAvailable()) {
-        // Check if already connected
-        const account = getConnectedAccount()
-        if (account) {
-          setMetaMaskAccount(account)
+      // Initialize Arkiv client with private key
+      initializeArkivClient().then((success) => {
+        if (success) {
           setArkivStatus('ready')
+          console.log('✅ Arkiv client initialized with private key')
         } else {
           setArkivStatus('not-configured')
+          console.warn('⚠️ Arkiv client not initialized. Please check ARKIV_PRIVATE_KEY environment variable.')
         }
-        
-        // Listen for account changes
-        if (typeof window !== 'undefined' && window.ethereum) {
-          window.ethereum.on('accountsChanged', (accounts: string[]) => {
-            if (accounts.length === 0) {
-              setMetaMaskAccount(null)
-              setArkivStatus('not-configured')
-            } else {
-              setMetaMaskAccount(accounts[0])
-              setArkivStatus('ready')
-            }
-          })
-        }
-      } else {
-        console.log('⚠️ MetaMask not detected. Please install MetaMask extension.')
-        setArkivStatus('not-configured')
-      }
+      }).catch((err) => {
+        console.error('⚠️ Arkiv client initialization error:', err)
+        setArkivStatus('error')
+      })
       
       setStatus('🔄 Setting up Direct Messaging...')
       
@@ -402,6 +384,24 @@ export default function ServerPage() {
         </div>
 
         {/* Status Card */}
+        {/* Navigation */}
+        <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-lg p-4 mb-6">
+          <div className="flex gap-4">
+            <a
+              href="/"
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-white text-sm"
+            >
+              🏠 Server Dashboard
+            </a>
+            <a
+              href="/alldatas"
+              className="px-4 py-2 bg-purple-700 hover:bg-purple-600 rounded text-white text-sm"
+            >
+              📊 View All Data (API)
+            </a>
+          </div>
+        </div>
+
         <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-lg p-6">
           <h2 className="text-xl font-semibold mb-4">📊 Server Status</h2>
           <div className="flex items-center space-x-3">
@@ -413,62 +413,35 @@ export default function ServerPage() {
             <p className="font-mono text-sm">{status}</p>
           </div>
           
-          {/* Arkiv Status with MetaMask */}
+          {/* Arkiv Status */}
           <div className="mt-4 space-y-2">
             <div className="flex items-center space-x-3">
               <div className={`w-3 h-3 rounded-full ${
                 arkivStatus === 'ready' ? 'bg-green-500' :
                 arkivStatus === 'not-configured' ? 'bg-yellow-500' :
                 arkivStatus === 'error' ? 'bg-red-500' :
-                arkivStatus === 'connecting' ? 'bg-blue-500 animate-pulse' :
                 'bg-gray-500 animate-pulse'
               }`} />
               <p className="text-sm text-slate-300">
-                Arkiv Storage (MetaMask): {
+                Arkiv Storage (Private Key): {
                   arkivStatus === 'ready' ? '✅ Ready' :
-                  arkivStatus === 'not-configured' ? '⚠️ Not connected' :
+                  arkivStatus === 'not-configured' ? '⚠️ Not configured' :
                   arkivStatus === 'error' ? '❌ Error' :
-                  arkivStatus === 'connecting' ? '🔄 Connecting...' :
                   '🔄 Initializing...'
                 }
               </p>
             </div>
             
-            {metaMaskAccount && (
-              <div className="ml-6 text-xs text-slate-400">
-                Connected: {metaMaskAccount.substring(0, 6)}...{metaMaskAccount.substring(38)}
+            {arkivStatus === 'not-configured' && (
+              <div className="ml-6 text-xs text-yellow-400 space-y-1">
+                <div>⚠️ Please set <code className="bg-yellow-900/50 px-1 rounded">NEXT_PUBLIC_ARKIV_PRIVATE_KEY</code> in your <code className="bg-yellow-900/50 px-1 rounded">.env.local</code> file.</div>
+                <div className="text-yellow-500/80 mt-1">Note: Since this runs in the browser, you must use the <code className="bg-yellow-900/50 px-1 rounded">NEXT_PUBLIC_</code> prefix.</div>
               </div>
             )}
             
-            {arkivStatus === 'not-configured' && isMetaMaskAvailable() && (
-              <button
-                onClick={async () => {
-                  setArkivStatus('connecting')
-                  try {
-                    const success = await connectMetaMask()
-                    if (success) {
-                      const account = getConnectedAccount()
-                      setMetaMaskAccount(account)
-                      setArkivStatus('ready')
-                    } else {
-                      setArkivStatus('not-configured')
-                      alert('Failed to connect MetaMask. Please make sure MetaMask is installed and unlocked.')
-                    }
-                  } catch (error: any) {
-                    console.error('MetaMask connection error:', error)
-                    setArkivStatus('error')
-                    alert(`Failed to connect: ${error.message}`)
-                  }
-                }}
-                className="ml-6 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm text-white"
-              >
-                🦊 Connect MetaMask
-              </button>
-            )}
-            
-            {!isMetaMaskAvailable() && (
-              <div className="ml-6 text-xs text-yellow-400">
-                ⚠️ MetaMask not detected. Please install MetaMask extension.
+            {arkivStatus === 'error' && (
+              <div className="ml-6 text-xs text-red-400">
+                ❌ Failed to initialize Arkiv client. Check console for details.
               </div>
             )}
           </div>
