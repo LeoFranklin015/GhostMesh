@@ -1,0 +1,802 @@
+[
+  {
+    "data": {
+      "type": "Weather",
+      "content": "74",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T19:45:06.718Z",
+      "uuid": 1,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Weather",
+      "content": "64",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T20:15:06.718Z",
+      "uuid": 2,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Weather",
+      "content": "60",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T20:45:06.718Z",
+      "uuid": 3,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Weather",
+      "content": "48",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T21:15:06.718Z",
+      "uuid": 4,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Weather",
+      "content": "62",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T21:45:06.718Z",
+      "uuid": 5,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Weather",
+      "content": "49",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T22:15:06.718Z",
+      "uuid": 6,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Weather",
+      "content": "73",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T22:45:06.718Z",
+      "uuid": 7,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Weather",
+      "content": "66",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T23:15:06.718Z",
+      "uuid": 8,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Weather",
+      "content": "65",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T23:45:06.718Z",
+      "uuid": 9,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Weather",
+      "content": "66",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T00:15:06.718Z",
+      "uuid": 10,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Weather",
+      "content": "78",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T00:45:06.718Z",
+      "uuid": 11,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Weather",
+      "content": "49",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T01:15:06.718Z",
+      "uuid": 12,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Weather",
+      "content": "43",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T01:45:06.718Z",
+      "uuid": 13,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Weather",
+      "content": "53",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T02:15:06.718Z",
+      "uuid": 14,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Weather",
+      "content": "86",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T02:45:06.718Z",
+      "uuid": 15,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Weather",
+      "content": "71",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T03:15:06.718Z",
+      "uuid": 16,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Weather",
+      "content": "63",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T03:45:06.718Z",
+      "uuid": 17,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Weather",
+      "content": "81",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T04:15:06.718Z",
+      "uuid": 18,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Weather",
+      "content": "82",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T04:45:06.718Z",
+      "uuid": 19,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Weather",
+      "content": "55",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T05:15:06.718Z",
+      "uuid": 20,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Temperature",
+      "content": "33.3",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T19:45:06.722Z",
+      "uuid": 1,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Temperature",
+      "content": "16.4",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T20:15:06.722Z",
+      "uuid": 2,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Temperature",
+      "content": "16.8",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T20:45:06.722Z",
+      "uuid": 3,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Temperature",
+      "content": "28.9",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T21:15:06.722Z",
+      "uuid": 4,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Temperature",
+      "content": "30.0",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T21:45:06.722Z",
+      "uuid": 5,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Temperature",
+      "content": "32.6",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T22:15:06.722Z",
+      "uuid": 6,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Temperature",
+      "content": "17.6",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T22:45:06.722Z",
+      "uuid": 7,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Temperature",
+      "content": "18.9",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T23:15:06.722Z",
+      "uuid": 8,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Temperature",
+      "content": "17.7",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T23:45:06.722Z",
+      "uuid": 9,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Temperature",
+      "content": "32.8",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T00:15:06.722Z",
+      "uuid": 10,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Temperature",
+      "content": "18.3",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T00:45:06.722Z",
+      "uuid": 11,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Temperature",
+      "content": "20.7",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T01:15:06.722Z",
+      "uuid": 12,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Temperature",
+      "content": "34.1",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T01:45:06.722Z",
+      "uuid": 13,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Temperature",
+      "content": "30.5",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T02:15:06.722Z",
+      "uuid": 14,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Temperature",
+      "content": "27.3",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T02:45:06.722Z",
+      "uuid": 15,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Temperature",
+      "content": "16.9",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T03:15:06.722Z",
+      "uuid": 16,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Temperature",
+      "content": "17.8",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T03:45:06.722Z",
+      "uuid": 17,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Temperature",
+      "content": "21.1",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T04:15:06.722Z",
+      "uuid": 18,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Temperature",
+      "content": "16.7",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T04:45:06.722Z",
+      "uuid": 19,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Temperature",
+      "content": "15.6",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T05:15:06.722Z",
+      "uuid": 20,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Carbon Credits",
+      "content": "250",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T19:45:06.722Z",
+      "uuid": 1,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Carbon Credits",
+      "content": "204",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T20:15:06.722Z",
+      "uuid": 2,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Carbon Credits",
+      "content": "291",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T20:45:06.722Z",
+      "uuid": 3,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Carbon Credits",
+      "content": "247",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T21:15:06.722Z",
+      "uuid": 4,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Carbon Credits",
+      "content": "292",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T21:45:06.722Z",
+      "uuid": 5,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Carbon Credits",
+      "content": "204",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T22:15:06.722Z",
+      "uuid": 6,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Carbon Credits",
+      "content": "107",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T22:45:06.722Z",
+      "uuid": 7,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Carbon Credits",
+      "content": "489",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T23:15:06.722Z",
+      "uuid": 8,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Carbon Credits",
+      "content": "409",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T23:45:06.722Z",
+      "uuid": 9,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Carbon Credits",
+      "content": "354",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T00:15:06.722Z",
+      "uuid": 10,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Carbon Credits",
+      "content": "216",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T00:45:06.722Z",
+      "uuid": 11,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Carbon Credits",
+      "content": "307",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T01:15:06.722Z",
+      "uuid": 12,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Carbon Credits",
+      "content": "359",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T01:45:06.722Z",
+      "uuid": 13,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Carbon Credits",
+      "content": "151",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T02:15:06.722Z",
+      "uuid": 14,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Carbon Credits",
+      "content": "481",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T02:45:06.722Z",
+      "uuid": 15,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Carbon Credits",
+      "content": "414",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T03:15:06.722Z",
+      "uuid": 16,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Carbon Credits",
+      "content": "277",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T03:45:06.722Z",
+      "uuid": 17,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Carbon Credits",
+      "content": "455",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T04:15:06.722Z",
+      "uuid": 18,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Carbon Credits",
+      "content": "243",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T04:45:06.722Z",
+      "uuid": 19,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Carbon Credits",
+      "content": "274",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T05:15:06.722Z",
+      "uuid": 20,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Air Quality",
+      "content": "51",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T19:45:06.722Z",
+      "uuid": 1,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Air Quality",
+      "content": "56",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T20:15:06.722Z",
+      "uuid": 2,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Air Quality",
+      "content": "115",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T20:45:06.722Z",
+      "uuid": 3,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Air Quality",
+      "content": "44",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T21:15:06.722Z",
+      "uuid": 4,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Air Quality",
+      "content": "23",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T21:45:06.722Z",
+      "uuid": 5,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Air Quality",
+      "content": "24",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T22:15:06.722Z",
+      "uuid": 6,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Air Quality",
+      "content": "129",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T22:45:06.722Z",
+      "uuid": 7,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Air Quality",
+      "content": "103",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T23:15:06.722Z",
+      "uuid": 8,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Air Quality",
+      "content": "67",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-15T23:45:06.722Z",
+      "uuid": 9,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Air Quality",
+      "content": "92",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T00:15:06.722Z",
+      "uuid": 10,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Air Quality",
+      "content": "44",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T00:45:06.722Z",
+      "uuid": 11,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Air Quality",
+      "content": "148",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T01:15:06.722Z",
+      "uuid": 12,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Air Quality",
+      "content": "43",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T01:45:06.722Z",
+      "uuid": 13,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Air Quality",
+      "content": "50",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T02:15:06.722Z",
+      "uuid": 14,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Air Quality",
+      "content": "140",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T02:45:06.722Z",
+      "uuid": 15,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Air Quality",
+      "content": "116",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T03:15:06.722Z",
+      "uuid": 16,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Air Quality",
+      "content": "146",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T03:45:06.722Z",
+      "uuid": 17,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Air Quality",
+      "content": "45",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T04:15:06.722Z",
+      "uuid": 18,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Air Quality",
+      "content": "96",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T04:45:06.722Z",
+      "uuid": 19,
+      "source": "ghostmesh-server"
+    }
+  },
+  {
+    "data": {
+      "type": "Air Quality",
+      "content": "48",
+      "from": "nR4VB64Dx/xvVHAvGpC30Cnd8WVOXOqD3reTzsh+TIU=",
+      "timestamp": "2025-11-16T05:15:06.722Z",
+      "uuid": 20,
+      "source": "ghostmesh-server"
+    }
+  }
+]

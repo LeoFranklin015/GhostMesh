@@ -3,32 +3,27 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 4000",
+    "dev": "next dev -p 3001",
     "build": "next build",
-    "start": "next start -p 4000",
-    "lint": "eslint"
+    "start": "next start -p 3001",
+    "lint": "next lint",
+    "insert-sensor-data": "ts-node --project tsconfig.json lib/arkiv/script.ts"
   },
   "dependencies": {
-    "@arkiv-network/sdk": "^0.4.4",
-    "arkiv-sdk": "^0.1.19",
-    "dexie": "^3.2.4",
-    "dotenv": "^17.2.3",
-    "ethers": "^6.15.0",
-    "next": "14.2.18",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "tslib": "^2.8.1",
-    "viem": "^2.39.0",
-    "xxdk-wasm": "^0.3.22"
+    "@arkiv-network/sdk": "latest",
+    "next": "14.2.33",
+    "react": "^18",
+    "react-dom": "^18"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "eslint": "^8",
-    "eslint-config-next": "14.2.18",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "eslint-config-next": "14.2.33",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.18",
+    "typescript": "^5",
+    "ts-node": "^10.9.2"
   }
 }
