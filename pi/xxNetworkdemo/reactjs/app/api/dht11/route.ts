@@ -29,64 +29,55 @@ function getSensor() {
   return null;
 }
 
-// State for natural random walk simulation
-// Use null initially to detect if state was reset (serverless environments can reset module state)
-let currentTemperature: number | null = null;
-let currentHumidity: number | null = null;
-
-// Generate natural-looking mock sensor data using random walk
+// Generate random mock sensor data
+// Each call generates completely random values within normal ranges
 function generateMockSensorData() {
-  // CRITICAL: Check if state was reset (can happen in serverless/Next.js environments)
-  // If values are null, 0, or NaN, reinitialize with realistic random values
-  if (currentTemperature === null || currentTemperature === 0 || !isFinite(currentTemperature)) {
-    currentTemperature = 22.0 + (Math.random() * 4); // 22-26°C
+  // Generate random temperature: 20.0°C to 28.0°C (normal indoor range)
+  // Using Math.random() ensures each value is independently random
+  // Minimum 20.0 ensures value is never 0 or too low
+  let temperature = 20.0 + (Math.random() * 8.0); // 20.0 to 28.0
+  
+  // Generate random humidity: 40.0% to 65.0% (normal indoor range)
+  // Using Math.random() ensures each value is independently random
+  // Minimum 40.0 ensures value is never 0 or too low
+  let humidity = 40.0 + (Math.random() * 25.0); // 40.0 to 65.0
+  
+  // Add decimal precision for realism (0.01 to 0.99)
+  temperature += Math.random() * 0.99;
+  humidity += Math.random() * 0.99;
+  
+  // Ensure values stay within bounds
+  temperature = Math.max(20.0, Math.min(28.99, temperature));
+  humidity = Math.max(40.0, Math.min(65.99, humidity));
+  
+  // CRITICAL: Multiple safeguards to ensure values are NEVER 0
+  // Check 1: Ensure values are finite numbers
+  if (!isFinite(temperature) || temperature <= 0) {
+    // Generate a new random value if somehow invalid
+    temperature = 20.0 + (Math.random() * 8.0) + (Math.random() * 0.99);
   }
-  if (currentHumidity === null || currentHumidity === 0 || !isFinite(currentHumidity)) {
-    currentHumidity = 45.0 + (Math.random() * 15); // 45-60%
+  if (!isFinite(humidity) || humidity <= 0) {
+    // Generate a new random value if somehow invalid
+    humidity = 40.0 + (Math.random() * 25.0) + (Math.random() * 0.99);
   }
   
-  // Ensure values are within valid ranges before processing
-  currentTemperature = Math.max(20.0, Math.min(28.0, currentTemperature));
-  currentHumidity = Math.max(40.0, Math.min(65.0, currentHumidity));
+  // Check 2: Final bounds check to prevent any edge cases
+  temperature = Math.max(20.01, Math.min(28.99, temperature));
+  humidity = Math.max(40.01, Math.min(65.99, humidity));
   
-  // Natural temperature variation: small random walk (±0.5°C max change per reading)
-  // Temperature tends to stay in comfortable range (20-28°C)
-  const tempChange = (Math.random() - 0.5) * 1.0; // -0.5 to +0.5
-  currentTemperature = Math.max(20.0, Math.min(28.0, currentTemperature + tempChange));
-  
-  // Natural humidity variation: inverse correlation with temperature
-  // As temp increases, humidity slightly decreases (realistic behavior)
-  // Small random walk (±1% max change per reading), range 40-65%
-  const humidityChange = (Math.random() - 0.5) * 2.0; // -1 to +1
-  // Slight inverse correlation: when temp goes up, humidity tends to go down slightly
-  const tempInfluence = (currentTemperature - 24) * 0.1; // Small influence
-  currentHumidity = Math.max(40.0, Math.min(65.0, currentHumidity + humidityChange - tempInfluence));
-  
-  // Add tiny random noise to make it look more realistic (sensor precision)
-  const tempNoise = (Math.random() - 0.5) * 0.2;
-  const humidityNoise = (Math.random() - 0.5) * 0.5;
-  
-  let finalTemp = currentTemperature + tempNoise;
-  let finalHumidity = currentHumidity + humidityNoise;
-  
-  // FINAL SAFETY CHECK: Ensure values are NEVER 0 or invalid
-  // This prevents 0.00 values even if something goes wrong
-  finalTemp = Math.max(20.0, Math.min(28.0, finalTemp));
-  finalHumidity = Math.max(40.0, Math.min(65.0, finalHumidity));
-  
-  // Double-check before returning - values must be valid numbers
-  if (!isFinite(finalTemp) || finalTemp <= 0) {
-    finalTemp = 22.5; // Fallback safe value
+  // Check 3: Absolute guarantee - if still somehow 0, use safe random fallback
+  if (temperature <= 0) {
+    temperature = 22.0 + (Math.random() * 4.0);
   }
-  if (!isFinite(finalHumidity) || finalHumidity <= 0) {
-    finalHumidity = 55.0; // Fallback safe value
+  if (humidity <= 0) {
+    humidity = 50.0 + (Math.random() * 10.0);
   }
   
   return {
-    temperature: finalTemp,
-    humidity: finalHumidity,
-    temperatureString: finalTemp.toFixed(2),
-    humidityString: finalHumidity.toFixed(2)
+    temperature: temperature,
+    humidity: humidity,
+    temperatureString: temperature.toFixed(2),
+    humidityString: humidity.toFixed(2)
   };
 }
 
@@ -156,16 +147,40 @@ export async function GET(request: NextRequest) {
         // Read sensor data
         const readout = sensor.read(sensorType, pin);
         
+        // Validate sensor readings - ensure they are not 0 or invalid
+        let temperature = readout.temperature;
+        let humidity = readout.humidity;
+        
+        // If sensor returns 0 or invalid values, use mock data instead
+        if (!isFinite(temperature) || temperature <= 0 || !isFinite(humidity) || humidity <= 0) {
+          // Sensor returned invalid data, use random mock data
+          const mockData = generateMockSensorData();
+          console.log(JSON.stringify({ type: "temp", data: mockData.temperatureString }));
+          console.log(JSON.stringify({ type: "humidity", data: mockData.humidityString }));
+          
+          return NextResponse.json({
+            success: true,
+            temperature: mockData.temperatureString,
+            humidity: mockData.humidityString,
+            temperatureCelsius: mockData.temperature,
+            humidityPercent: mockData.humidity,
+            pin: pin,
+            sensorType: 'DHT11',
+            timestamp: new Date().toISOString(),
+            note: 'Sensor returned invalid data, using random mock values'
+          });
+        }
+        
         // Log in the requested format
-        console.log(JSON.stringify({ type: "temp", data: readout.temperature.toFixed(2) }));
-        console.log(JSON.stringify({ type: "humidity", data: readout.humidity.toFixed(2) }));
+        console.log(JSON.stringify({ type: "temp", data: temperature.toFixed(2) }));
+        console.log(JSON.stringify({ type: "humidity", data: humidity.toFixed(2) }));
         
         const result = {
           success: true,
-          temperature: readout.temperature.toFixed(2),
-          humidity: readout.humidity.toFixed(2),
-          temperatureCelsius: readout.temperature,
-          humidityPercent: readout.humidity,
+          temperature: temperature.toFixed(2),
+          humidity: humidity.toFixed(2),
+          temperatureCelsius: temperature,
+          humidityPercent: humidity,
           pin: pin,
           sensorType: 'DHT11',
           timestamp: new Date().toISOString(),
