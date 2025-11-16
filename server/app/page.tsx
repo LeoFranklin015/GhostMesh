@@ -886,13 +886,16 @@ export default function ServerPage() {
                             const newContent = prompt('Enter updated message content:', msg.message.replace('📩 ', ''))
                             if (newContent) {
                               addCrudLog('UPDATE', 'success', 'Updating entity...', msg.arkivEntityKey)
-                              const result = await updateMessageInArkiv(msg.arkivEntityKey, {
+                              // Create content as JSON string with type and data
+                              const contentJson = JSON.stringify({
                                 type: "xx-network-message",
-                                content: newContent,
+                                data: newContent
+                              })
+                              const result = await updateMessageInArkiv(msg.arkivEntityKey, {
+                                content: contentJson,
                                 from: msg.from,
                                 timestamp: msg.timestamp,
-                                source: 'ghostmesh-server',
-                                updated: true
+                                source: 'ghostmesh-server'
                               })
                               if (result.success) {
                                 addCrudLog('UPDATE', 'success', 'Entity updated successfully', result.entityKey)
