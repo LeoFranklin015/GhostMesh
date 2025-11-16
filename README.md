@@ -58,5 +58,5 @@ GhostMesh solves the privacy gap by combining **xx.mixnet** and **Arkiv** in a s
 <img width="4626" height="2664" alt="image" src="https://github.com/user-attachments/assets/84a81b54-3bcd-421e-aee1-8aa0daa33c2e" />
 
 
-## ** Demo Video
+## **Demo Video**
 https://youtu.be/G-aNLL8FXTo
