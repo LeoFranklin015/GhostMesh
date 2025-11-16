@@ -3,17 +3,43 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts"
 import { Leaf, TrendingUp, Award } from "lucide-react"
-import { generateSensorTimeSeriesData, getSensorStats } from "@/lib/sensor-data"
-import { useMemo } from "react"
+import { sensorsApi } from "@/lib/api/sensorsApi"
+import { getUnitForType } from "@/lib/sensor-data"
+import { useEffect, useState, useMemo } from "react"
 
 export function CarbonSensor() {
+  const [rawData, setRawData] = useState<Array<{ timestamp: string; value: number; hour: number }>>([])
+  const [stats, setStats] = useState({ current: '0', change: 0, max: '0', min: '0', avg: '0' })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        setLoading(true)
+        setError(null)
+        const response = await sensorsApi.fetchSensorData('carbon')
+        const transformed = sensorsApi.transformToChartData(response.entities)
+        setRawData(transformed)
+        setStats(sensorsApi.calculateStats(transformed))
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load carbon data')
+        console.error('Error fetching carbon data:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+    const interval = setInterval(fetchData, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
   const chartData = useMemo(() => {
-    // Generate hourly data but group by 4-hour blocks for bars
-    const hourlyData = generateSensorTimeSeriesData("carbon", 24)
+    // Group by 4-hour blocks for bars
     const groupedData = []
-    
-    for (let i = 0; i < hourlyData.length; i += 4) {
-      const block = hourlyData.slice(i, i + 4)
+    for (let i = 0; i < rawData.length; i += 4) {
+      const block = rawData.slice(i, i + 4)
       const sum = block.reduce((acc, curr) => acc + curr.value, 0)
       const startHour = new Date(block[0].timestamp).getHours()
       
@@ -23,14 +49,31 @@ export function CarbonSensor() {
         timestamp: block[0].timestamp
       })
     }
-    
     return groupedData
-  }, [])
-  
-  const stats = useMemo(() => getSensorStats("carbon"), [])
+  }, [rawData])
   const totalOffset = useMemo(() => {
-    return chartData.reduce((acc, curr) => acc + curr.value, 0)
-  }, [chartData])
+    return rawData.reduce((acc, curr) => acc + curr.value, 0)
+  }, [rawData])
+
+  if (loading && rawData.length === 0) {
+    return (
+      <Card className="bg-[#1B1B1B] border-[#2A2A2A]">
+        <CardContent className="h-[400px] flex items-center justify-center">
+          <div className="text-[#9A9A9A]">Loading carbon data...</div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (error) {
+    return (
+      <Card className="bg-[#1B1B1B] border-[#2A2A2A]">
+        <CardContent className="h-[400px] flex items-center justify-center">
+          <div className="text-red-500">Error: {error}</div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card className="bg-[#1B1B1B] border-[#2A2A2A]">
@@ -43,7 +86,7 @@ export function CarbonSensor() {
             <div>
               <CardTitle className="text-[#EDEDED]">Carbon Credits</CardTitle>
               <CardDescription className="text-[#9A9A9A]">
-                CO₂ offset tracking • Last 24h
+                CO₂ offset tracking • {rawData.length} readings
               </CardDescription>
             </div>
           </div>
@@ -107,7 +150,7 @@ export function CarbonSensor() {
               cursor={{ fill: '#10B981', opacity: 0.1 }}
               labelStyle={{ color: '#9A9A9A' }}
               itemStyle={{ color: '#10B981' }}
-              formatter={(value: number) => [`${value} kg CO₂`, 'Carbon Offset']}
+              formatter={(value: number) => [`${value} ${getUnitForType('carbon')}`, 'Carbon Offset']}
               labelFormatter={(label) => `Period: ${label}`}
             />
             <Bar 

@@ -3,17 +3,64 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, ReferenceLine } from "recharts"
 import { Thermometer, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react"
-import { generateSensorTimeSeriesData, getSensorStats } from "@/lib/sensor-data"
-import { useMemo } from "react"
+import { sensorsApi } from "@/lib/api/sensorsApi"
+import { getUnitForType } from "@/lib/sensor-data"
+import { useEffect, useState, useMemo } from "react"
 
 export function TemperatureSensor() {
-  const chartData = useMemo(() => generateSensorTimeSeriesData("temp", 24), [])
-  const stats = useMemo(() => getSensorStats("temp"), [])
+  const [chartData, setChartData] = useState<Array<{ timestamp: string; value: number; hour: number }>>([])
+  const [stats, setStats] = useState({ current: '0', change: 0, max: '0', min: '0', avg: '0' })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        setLoading(true)
+        setError(null)
+        const response = await sensorsApi.fetchSensorData('temp')
+        const transformed = sensorsApi.transformToChartData(response.entities)
+        setChartData(transformed)
+        setStats(sensorsApi.calculateStats(transformed))
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load temperature data')
+        console.error('Error fetching temperature data:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchData, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
   const avgTemp = parseFloat(stats.avg)
 
   const formatXAxis = (timestamp: string) => {
     const date = new Date(timestamp)
     return date.getHours().toString().padStart(2, '0') + ':00'
+  }
+
+  if (loading && chartData.length === 0) {
+    return (
+      <Card className="bg-[#1B1B1B] border-[#2A2A2A]">
+        <CardContent className="h-[400px] flex items-center justify-center">
+          <div className="text-[#9A9A9A]">Loading temperature data...</div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (error) {
+    return (
+      <Card className="bg-[#1B1B1B] border-[#2A2A2A]">
+        <CardContent className="h-[400px] flex items-center justify-center">
+          <div className="text-red-500">Error: {error}</div>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
@@ -27,14 +74,14 @@ export function TemperatureSensor() {
             <div>
               <CardTitle className="text-[#EDEDED]">Temperature Sensor</CardTitle>
               <CardDescription className="text-[#9A9A9A]">
-                Ambient temperature • Last 24h
+                Ambient temperature • {chartData.length} readings
               </CardDescription>
             </div>
           </div>
           <div className="text-right">
             <div className="text-2xl font-bold text-[#EDEDED]">
               {stats.current}
-              <span className="text-sm text-[#9A9A9A] ml-1">°C</span>
+              <span className="text-sm text-[#9A9A9A] ml-1">{getUnitForType('temp')}</span>
             </div>
             <div className={`flex items-center gap-1 text-sm ${stats.change >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
               {stats.change >= 0 ? (
@@ -51,15 +98,15 @@ export function TemperatureSensor() {
         <div className="grid grid-cols-3 gap-4 mb-4 p-4 bg-[#0E0E0E] rounded-lg">
           <div>
             <div className="text-xs text-[#9A9A9A] mb-1">Average</div>
-            <div className="text-sm font-medium text-[#EDEDED]">{stats.avg}°C</div>
+            <div className="text-sm font-medium text-[#EDEDED]">{stats.avg} {getUnitForType('temp')}</div>
           </div>
           <div>
             <div className="text-xs text-[#9A9A9A] mb-1">Peak</div>
-            <div className="text-sm font-medium text-red-400">{stats.max}°C</div>
+            <div className="text-sm font-medium text-red-400">{stats.max} {getUnitForType('temp')}</div>
           </div>
           <div>
             <div className="text-xs text-[#9A9A9A] mb-1">Low</div>
-            <div className="text-sm font-medium text-blue-400">{stats.min}°C</div>
+            <div className="text-sm font-medium text-blue-400">{stats.min} {getUnitForType('temp')}</div>
           </div>
         </div>
         
@@ -96,7 +143,7 @@ export function TemperatureSensor() {
               }}
               labelStyle={{ color: '#9A9A9A' }}
               itemStyle={{ color: '#EF4444' }}
-              formatter={(value: number) => [`${value.toFixed(1)}°C`, 'Temperature']}
+              formatter={(value: number) => [`${value.toFixed(1)} ${getUnitForType('temp')}`, 'Temperature']}
               labelFormatter={(label) => {
                 const date = new Date(label)
                 return date.toLocaleString('en-US', { 
@@ -124,7 +171,7 @@ export function TemperatureSensor() {
             <div className="text-xs">
               <div className="font-medium text-[#EDEDED]">Status: {parseFloat(stats.current) > 30 ? 'Hot' : parseFloat(stats.current) > 20 ? 'Normal' : 'Cool'}</div>
               <div className="text-[#9A9A9A] mt-0.5">
-                Range: {stats.min}°C - {stats.max}°C • Variation: {(parseFloat(stats.max) - parseFloat(stats.min)).toFixed(1)}°C
+                Range: {stats.min} - {stats.max} {getUnitForType('temp')} • Variation: {(parseFloat(stats.max) - parseFloat(stats.min)).toFixed(1)} {getUnitForType('temp')}
               </div>
             </div>
           </div>

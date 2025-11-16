@@ -3,18 +3,46 @@ import { NextRequest, NextResponse } from 'next/server'
 import { readMessagesFromArkiv } from '../../../lib/arkiv'
 
 /**
+ * CORS headers helper
+ */
+function getCorsHeaders() {
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001',
+  ]
+  
+  return {
+    'Access-Control-Allow-Origin': '*', // In development, allow all origins
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Max-Age': '86400',
+  }
+}
+
+/**
+ * Handle OPTIONS request for CORS preflight
+ */
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: getCorsHeaders(),
+  })
+}
+
+/**
  * GET /api/[type]
  * Fetch messages from Arkiv based on the type parameter with optional filters
  * 
  * Examples:
- *   GET /api/Weather
- *   GET /api/Weather?minData=30
- *   GET /api/Weather?startTime=2025-11-16T00:00:00Z&endTime=2025-11-16T23:59:59Z
- *   GET /api/Weather?minData=30&startTime=2025-11-16T00:00:00Z&endTime=2025-11-17T00:00:00Z
+ *   GET /api/temp
+ *   GET /api/humidity?minData=30
+ *   GET /api/air?startTime=2025-11-16T00:00:00Z&endTime=2025-11-16T23:59:59Z
  * 
  * Query Parameters:
  *   - minData: Filter messages where decrypted content VALUE (if numeric) or LENGTH (if string) is greater than this value
- *              Examples: minData=30 returns Weather data with temperature > 30
+ *              Examples: minData=30 returns temp data with temperature > 30
  *   - startTime: Filter messages after this timestamp (ISO 8601 format)
  *   - endTime: Filter messages before this timestamp (ISO 8601 format)
  * 
@@ -37,7 +65,10 @@ export async function GET(
     if (!type || type.trim() === '') {
       return NextResponse.json(
         { error: 'Type parameter is required' },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: getCorsHeaders(),
+        }
       )
     }
 
@@ -46,12 +77,15 @@ export async function GET(
     let startTimeDate: Date | null = null
     let endTimeDate: Date | null = null
 
-    if (minData) {
+      if (minData) {
       minDataThreshold = parseInt(minData, 10)
       if (isNaN(minDataThreshold) || minDataThreshold < 0) {
         return NextResponse.json(
           { error: 'minData must be a positive number' },
-          { status: 400 }
+          { 
+            status: 400,
+            headers: getCorsHeaders(),
+          }
         )
       }
     }
@@ -61,7 +95,10 @@ export async function GET(
       if (isNaN(startTimeDate.getTime())) {
         return NextResponse.json(
           { error: 'startTime must be a valid ISO 8601 timestamp' },
-          { status: 400 }
+          { 
+            status: 400,
+            headers: getCorsHeaders(),
+          }
         )
       }
     }
@@ -71,7 +108,10 @@ export async function GET(
       if (isNaN(endTimeDate.getTime())) {
         return NextResponse.json(
           { error: 'endTime must be a valid ISO 8601 timestamp' },
-          { status: 400 }
+          { 
+            status: 400,
+            headers: getCorsHeaders(),
+          }
         )
       }
     }
@@ -80,7 +120,10 @@ export async function GET(
     if (startTimeDate && endTimeDate && startTimeDate > endTimeDate) {
       return NextResponse.json(
         { error: 'startTime must be before endTime' },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: getCorsHeaders(),
+        }
       )
     }
 
@@ -103,7 +146,10 @@ export async function GET(
           error: result.error || 'Failed to fetch messages',
           type: type 
         },
-        { status: 500 }
+        { 
+          status: 500,
+          headers: getCorsHeaders(),
+        }
       )
     }
 
@@ -151,19 +197,24 @@ export async function GET(
 
     console.log(`✅ [API] Found ${filteredEntities.length} entities of type "${type}" (${totalCount} total before filtering)`)
 
-    return NextResponse.json({
-      success: true,
-      type: type,
-      count: filteredEntities.length,
-      totalBeforeFiltering: totalCount,
-      entities: filteredEntities,
-      filters: {
-        minData: minDataThreshold,
-        startTime: startTime || null,
-        endTime: endTime || null
+    return NextResponse.json(
+      {
+        success: true,
+        type: type,
+        count: filteredEntities.length,
+        totalBeforeFiltering: totalCount,
+        entities: filteredEntities,
+        filters: {
+          minData: minDataThreshold,
+          startTime: startTime || null,
+          endTime: endTime || null
+        },
+        timestamp: new Date().toISOString()
       },
-      timestamp: new Date().toISOString()
-    })
+      {
+        headers: getCorsHeaders(),
+      }
+    )
   } catch (error: any) {
     console.error('❌ [API] Unexpected error:', error)
     return NextResponse.json(
@@ -172,7 +223,10 @@ export async function GET(
         error: error.message || 'Internal server error',
         details: process.env.NODE_ENV === 'development' ? error.stack : undefined
       },
-      { status: 500 }
+      { 
+        status: 500,
+        headers: getCorsHeaders(),
+      }
     )
   }
 }

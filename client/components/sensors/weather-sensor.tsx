@@ -3,16 +3,61 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts"
 import { Cloud, TrendingUp, TrendingDown, Droplets } from "lucide-react"
-import { generateSensorTimeSeriesData, getSensorStats } from "@/lib/sensor-data"
-import { useMemo } from "react"
+import { sensorsApi } from "@/lib/api/sensorsApi"
+import { getUnitForType } from "@/lib/sensor-data"
+import { useEffect, useState } from "react"
 
 export function WeatherSensor() {
-  const chartData = useMemo(() => generateSensorTimeSeriesData("humidity", 24), [])
-  const stats = useMemo(() => getSensorStats("humidity"), [])
+  const [chartData, setChartData] = useState<Array<{ timestamp: string; value: number; hour: number }>>([])
+  const [stats, setStats] = useState({ current: '0', change: 0, max: '0', min: '0', avg: '0' })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        setLoading(true)
+        setError(null)
+        const response = await sensorsApi.fetchSensorData('humidity')
+        const transformed = sensorsApi.transformToChartData(response.entities)
+        setChartData(transformed)
+        setStats(sensorsApi.calculateStats(transformed))
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load humidity data')
+        console.error('Error fetching humidity data:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+    const interval = setInterval(fetchData, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   const formatXAxis = (timestamp: string) => {
     const date = new Date(timestamp)
     return date.getHours().toString().padStart(2, '0') + ':00'
+  }
+
+  if (loading && chartData.length === 0) {
+    return (
+      <Card className="bg-[#1B1B1B] border-[#2A2A2A]">
+        <CardContent className="h-[400px] flex items-center justify-center">
+          <div className="text-[#9A9A9A]">Loading humidity data...</div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (error) {
+    return (
+      <Card className="bg-[#1B1B1B] border-[#2A2A2A]">
+        <CardContent className="h-[400px] flex items-center justify-center">
+          <div className="text-red-500">Error: {error}</div>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
@@ -26,14 +71,14 @@ export function WeatherSensor() {
             <div>
               <CardTitle className="text-[#EDEDED]">Humidity Sensor</CardTitle>
               <CardDescription className="text-[#9A9A9A]">
-                Weather monitoring • Last 24h
+                Weather monitoring • {chartData.length} readings
               </CardDescription>
             </div>
           </div>
           <div className="text-right">
             <div className="text-2xl font-bold text-[#EDEDED]">
               {stats.current}
-              <span className="text-sm text-[#9A9A9A] ml-1">%</span>
+              <span className="text-sm text-[#9A9A9A] ml-1">{getUnitForType('humidity')}</span>
             </div>
             <div className={`flex items-center gap-1 text-sm ${stats.change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
               {stats.change >= 0 ? (
@@ -50,15 +95,15 @@ export function WeatherSensor() {
         <div className="grid grid-cols-3 gap-4 mb-4 p-4 bg-[#0E0E0E] rounded-lg">
           <div>
             <div className="text-xs text-[#9A9A9A] mb-1">Average</div>
-            <div className="text-sm font-medium text-[#EDEDED]">{stats.avg}%</div>
+            <div className="text-sm font-medium text-[#EDEDED]">{stats.avg} {getUnitForType('humidity')}</div>
           </div>
           <div>
             <div className="text-xs text-[#9A9A9A] mb-1">Maximum</div>
-            <div className="text-sm font-medium text-[#EDEDED]">{stats.max}%</div>
+            <div className="text-sm font-medium text-[#EDEDED]">{stats.max} {getUnitForType('humidity')}</div>
           </div>
           <div>
             <div className="text-xs text-[#9A9A9A] mb-1">Minimum</div>
-            <div className="text-sm font-medium text-[#EDEDED]">{stats.min}%</div>
+            <div className="text-sm font-medium text-[#EDEDED]">{stats.min} {getUnitForType('humidity')}</div>
           </div>
         </div>
         
@@ -95,7 +140,7 @@ export function WeatherSensor() {
               }}
               labelStyle={{ color: '#9A9A9A' }}
               itemStyle={{ color: '#3B82F6' }}
-              formatter={(value: number) => [`${value.toFixed(1)}%`, 'Humidity']}
+              formatter={(value: number) => [`${value.toFixed(1)} ${getUnitForType('humidity')}`, 'Humidity']}
               labelFormatter={(label) => {
                 const date = new Date(label)
                 return date.toLocaleString('en-US', { 

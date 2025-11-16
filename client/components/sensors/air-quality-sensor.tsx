@@ -3,12 +3,37 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Pie, PieChart, ResponsiveContainer, Cell, Tooltip, Legend } from "recharts"
 import { Wind, TrendingUp, TrendingDown, AlertCircle } from "lucide-react"
-import { generateSensorTimeSeriesData, getSensorStats } from "@/lib/sensor-data"
-import { useMemo } from "react"
+import { sensorsApi } from "@/lib/api/sensorsApi"
+import { getUnitForType } from "@/lib/sensor-data"
+import { useEffect, useState, useMemo } from "react"
 
 export function AirQualitySensor() {
-  const timeSeriesData = useMemo(() => generateSensorTimeSeriesData("air", 24), [])
-  const stats = useMemo(() => getSensorStats("air"), [])
+  const [timeSeriesData, setTimeSeriesData] = useState<Array<{ timestamp: string; value: number; hour: number }>>([])
+  const [stats, setStats] = useState({ current: '0', change: 0, max: '0', min: '0', avg: '0' })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        setLoading(true)
+        setError(null)
+        const response = await sensorsApi.fetchSensorData('air')
+        const transformed = sensorsApi.transformToChartData(response.entities)
+        setTimeSeriesData(transformed)
+        setStats(sensorsApi.calculateStats(transformed))
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load air quality data')
+        console.error('Error fetching air quality data:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+    const interval = setInterval(fetchData, 30000)
+    return () => clearInterval(interval)
+  }, [])
   
   // Calculate AQI category distribution
   const categoryData = useMemo(() => {
@@ -45,6 +70,26 @@ export function AirQualitySensor() {
 
   const aqiStatus = getAQIStatus(currentAQI)
 
+  if (loading && timeSeriesData.length === 0) {
+    return (
+      <Card className="bg-[#1B1B1B] border-[#2A2A2A]">
+        <CardContent className="h-[400px] flex items-center justify-center">
+          <div className="text-[#9A9A9A]">Loading air quality data...</div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (error) {
+    return (
+      <Card className="bg-[#1B1B1B] border-[#2A2A2A]">
+        <CardContent className="h-[400px] flex items-center justify-center">
+          <div className="text-red-500">Error: {error}</div>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <Card className="bg-[#1B1B1B] border-[#2A2A2A]">
       <CardHeader>
@@ -56,14 +101,14 @@ export function AirQualitySensor() {
             <div>
               <CardTitle className="text-[#EDEDED]">Air Quality Index</CardTitle>
               <CardDescription className="text-[#9A9A9A]">
-                AQI monitoring • Last 24h distribution
+                AQI monitoring • {timeSeriesData.length} readings
               </CardDescription>
             </div>
           </div>
           <div className="text-right">
             <div className="text-2xl font-bold text-[#EDEDED]">
               {stats.current}
-              <span className="text-sm text-[#9A9A9A] ml-1">AQI</span>
+              <span className="text-sm text-[#9A9A9A] ml-1">{getUnitForType('air')}</span>
             </div>
             <div className={`flex items-center gap-1 text-sm ${stats.change >= 0 ? 'text-red-500' : 'text-green-500'}`}>
               {stats.change >= 0 ? (
