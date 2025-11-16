@@ -20,6 +20,7 @@ export { initializeArkivClient } from './client'
 // Export CRUD operations
 export {
   storeMessageToArkiv,
+  storeSensorDataToArkiv,
   readMessagesFromArkiv,
   updateMessageInArkiv,
   deleteMessageFromArkiv,

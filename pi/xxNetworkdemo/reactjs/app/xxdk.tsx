@@ -346,8 +346,8 @@ export function XXMyCredentials() {
 export function XXMsgSender() {
     const dm = useContext(XXDMClient);
     // Hardcoded recipient credentials
-    const recipientToken = "999853988";
-    const recipientPubKey = "aqm6mSEEc1xq44xB/cMCxraRU4e7nKLQmllHEkA25EA=";
+    const recipientToken = "3155429120";
+    const recipientPubKey = "bIwv9kXXGAhJ41qG/7HpUfI22NziMKkLsOogpXWooE0=";
     
     const [isSendingContinuously, setIsSendingContinuously] = useState<boolean>(false);
     const [sendCount, setSendCount] = useState<number>(0);

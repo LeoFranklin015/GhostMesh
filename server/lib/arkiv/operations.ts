@@ -12,7 +12,8 @@ import {
   DEFAULT_EXPIRATION_HOURS,
   isInitialized,
   walletClient,
-  publicClient
+  publicClient,
+  queueTransaction
 } from './types'
 
 /**
@@ -197,20 +198,24 @@ export async function storeMessageToArkiv(
     // Generate entity ID
     const entityId = generateUUID()
 
-    // Create entity using new SDK API
-    const { entityKey } = await walletClient.createEntity({
-      payload: jsonToPayload(encryptedPayload),
-      contentType: 'application/json',
-      attributes: [
-        { key: 'type', value: messagePayload.type },
-        { key: 'source', value: messagePayload.source },
-        { key: 'id', value: entityId },
-        ...(messageData.uuid ? [{ key: 'uuid', value: String(messageData.uuid) }] : []),
-        ...(messageData.from ? [{ key: 'from', value: messageData.from.substring(0, 20) }] : []),
-        { key: 'timestamp', value: String(new Date(messageData.timestamp).getTime()) },
-        { key: 'created', value: String(Date.now()) }
-      ],
-      expiresIn: ExpirationTime.fromHours(DEFAULT_EXPIRATION_HOURS),
+    // Queue the transaction to prevent "replacement transaction underpriced" errors
+    console.log('⏳ [CREATE] Queuing transaction to prevent conflicts...')
+    const { entityKey } = await queueTransaction(async () => {
+      // Create entity using new SDK API
+      return await walletClient.createEntity({
+        payload: jsonToPayload(encryptedPayload),
+        contentType: 'application/json',
+        attributes: [
+          { key: 'type', value: messagePayload.type },
+          { key: 'source', value: messagePayload.source },
+          { key: 'id', value: entityId },
+          ...(messageData.uuid ? [{ key: 'uuid', value: String(messageData.uuid) }] : []),
+          ...(messageData.from ? [{ key: 'from', value: messageData.from.substring(0, 20) }] : []),
+          { key: 'timestamp', value: String(new Date(messageData.timestamp).getTime()) },
+          { key: 'created', value: String(Date.now()) }
+        ],
+        expiresIn: ExpirationTime.fromHours(DEFAULT_EXPIRATION_HOURS),
+      })
     })
 
     console.log('✅ [CREATE] Message stored to Arkiv:', entityKey)
@@ -219,6 +224,132 @@ export async function storeMessageToArkiv(
     // Log error but don't throw - we don't want to break message receiving
     const errorMsg = error.message || String(error)
     console.error('❌ [CREATE] Failed to store message to Arkiv:', errorMsg)
+    return { success: false, error: errorMsg }
+  }
+}
+
+/**
+ * Store sensor data to Arkiv with encrypted temperature and humidity fields
+ * @param sensorData - The sensor data object with type, timestamp, temperature, humidity, pin, sensorType
+ * @param from - Sender public key
+ * @param uuid - Optional message UUID
+ * @returns Object with success status and entityKey or error message
+ */
+export async function storeSensorDataToArkiv(
+  sensorData: {
+    type: string
+    timestamp: string
+    temperature: string
+    humidity: string
+    pin: number
+    sensorType: string
+  },
+  from: string,
+  uuid?: string
+): Promise<{ success: boolean; entityKey?: string; error?: string }> {
+  try {
+    // Initialize client if not already done
+    if (!isInitialized || !walletClient) {
+      const initialized = await initializeArkivClient()
+      if (!initialized) {
+        const errorMsg = '⚠️ Arkiv: Client not initialized, skipping storage'
+        console.warn(errorMsg)
+        return { success: false, error: 'Arkiv client not initialized' }
+      }
+    }
+
+    console.log('🔒 [SENSOR] Processing sensor data...')
+    console.log('🔒 [SENSOR] Raw sensor data:', sensorData)
+    
+    // Encrypt temperature and humidity fields individually
+    let encryptedTemperature: string
+    let encryptedHumidity: string
+    
+    try {
+      console.log('🔒 [SENSOR] Encrypting temperature:', sensorData.temperature)
+      encryptedTemperature = await encryptData(sensorData.temperature)
+      console.log('✅ [SENSOR] Temperature encrypted successfully')
+      
+      console.log('🔒 [SENSOR] Encrypting humidity:', sensorData.humidity)
+      encryptedHumidity = await encryptData(sensorData.humidity)
+      console.log('✅ [SENSOR] Humidity encrypted successfully')
+    } catch (encryptError: any) {
+      console.error('❌ [SENSOR] Failed to encrypt sensor data:', encryptError)
+      return { success: false, error: `Encryption failed: ${encryptError.message}` }
+    }
+    
+    // Create payload with encrypted temperature and humidity
+    const sensorPayload = {
+      type: sensorData.type,
+      timestamp: sensorData.timestamp,
+      temperature: encryptedTemperature,  // Encrypted
+      humidity: encryptedHumidity,         // Encrypted
+      pin: sensorData.pin,
+      sensorType: sensorData.sensorType,
+      encrypted: true,
+      source: 'ghostmesh-server'
+    }
+    
+    // Wrap in encrypted payload structure
+    const encryptedPayload = {
+      encrypted: true,
+      data: sensorPayload
+    }
+    
+    // Verify we're storing encrypted values
+    if (sensorPayload.temperature === sensorData.temperature || sensorPayload.humidity === sensorData.humidity) {
+      console.error('❌ [SENSOR] CRITICAL: Encrypted values match original - encryption failed!')
+      return { success: false, error: 'CRITICAL: Encryption verification failed - plaintext detected' }
+    }
+    
+    console.log('✅ [SENSOR] Verification passed - encrypted values confirmed')
+    console.log('🔒 [SENSOR] Original temperature:', sensorData.temperature)
+    console.log('🔒 [SENSOR] Encrypted temperature (first 50 chars):', encryptedTemperature.substring(0, 50) + '...')
+    console.log('🔒 [SENSOR] Original humidity:', sensorData.humidity)
+    console.log('🔒 [SENSOR] Encrypted humidity (first 50 chars):', encryptedHumidity.substring(0, 50) + '...')
+
+    // Ensure wallet client is properly initialized
+    if (!walletClient) {
+      return { success: false, error: 'Wallet client not initialized. Please check ARKIV_PRIVATE_KEY environment variable.' }
+    }
+
+    // Verify account is set on wallet client
+    if (!walletClient.account) {
+      return { success: false, error: 'Account not set on wallet client. Please check ARKIV_PRIVATE_KEY environment variable.' }
+    }
+    
+    console.log('✅ Using account for storage:', walletClient.account.address)
+
+    // Generate entity ID
+    const entityId = generateUUID()
+
+    // Queue the transaction to prevent "replacement transaction underpriced" errors
+    console.log('⏳ [SENSOR] Queuing transaction to prevent conflicts...')
+    const { entityKey } = await queueTransaction(async () => {
+      // Create entity using new SDK API
+      return await walletClient.createEntity({
+        payload: jsonToPayload(encryptedPayload),
+        contentType: 'application/json',
+        attributes: [
+          { key: 'type', value: sensorData.type },
+          { key: 'source', value: 'ghostmesh-server' },
+          { key: 'id', value: entityId },
+          { key: 'sensorType', value: sensorData.sensorType },
+          { key: 'pin', value: String(sensorData.pin) },
+          ...(uuid ? [{ key: 'uuid', value: String(uuid) }] : []),
+          ...(from ? [{ key: 'from', value: from.substring(0, 20) }] : []),
+          { key: 'timestamp', value: String(new Date(sensorData.timestamp).getTime()) },
+          { key: 'created', value: String(Date.now()) }
+        ],
+        expiresIn: ExpirationTime.fromHours(DEFAULT_EXPIRATION_HOURS),
+      })
+    })
+
+    console.log('✅ [SENSOR] Sensor data stored to Arkiv:', entityKey)
+    return { success: true, entityKey }
+  } catch (error: any) {
+    const errorMsg = error.message || String(error)
+    console.error('❌ [SENSOR] Failed to store sensor data to Arkiv:', errorMsg)
     return { success: false, error: errorMsg }
   }
 }
@@ -331,30 +462,57 @@ export async function readMessagesFromArkiv(
         rawData = entity
       }
       
-      // Check if data has encrypted content field
+      // Check if data has encrypted content field or sensor data fields
       let decryptedData = rawData.data || rawData
       let encryptedContentString = null
       let decryptedContentString = null
       
-      if (rawData.encrypted && rawData.data && rawData.data.content) {
-        try {
-          console.log('🔓 [READ] Decrypting content for entity:', entity.entityKey)
-          encryptedContentString = rawData.data.content  // Store encrypted content for display
-          
-          // Decrypt only the content field
-          const decryptedContent = await decryptData(rawData.data.content)
-          decryptedContentString = decryptedContent
-          
-          // Replace encrypted content with decrypted content
-          decryptedData = {
-            ...rawData.data,
-            content: decryptedContent  // Decrypted content
+      if (rawData.encrypted && rawData.data) {
+        // Check if this is sensor data with encrypted temperature and humidity
+        if (rawData.data.type === 'sensor_data' && rawData.data.temperature && rawData.data.humidity) {
+          try {
+            console.log('🔓 [READ] Decrypting sensor data (temperature & humidity) for entity:', entity.entityKey)
+            
+            // Decrypt temperature and humidity fields
+            const decryptedTemperature = await decryptData(rawData.data.temperature)
+            const decryptedHumidity = await decryptData(rawData.data.humidity)
+            
+            // Replace encrypted fields with decrypted values
+            decryptedData = {
+              ...rawData.data,
+              temperature: decryptedTemperature,  // Decrypted
+              humidity: decryptedHumidity          // Decrypted
+            }
+            
+            console.log('✅ [READ] Successfully decrypted sensor data for entity:', entity.entityKey)
+          } catch (error: any) {
+            console.error('❌ [READ] Failed to decrypt sensor data:', error)
+            decryptedData = { ...rawData.data, decryptionError: error.message }
           }
-          
-          console.log('✅ [READ] Successfully decrypted content for entity:', entity.entityKey)
-        } catch (error: any) {
-          console.error('❌ [READ] Failed to decrypt content:', error)
-          decryptedData = { ...rawData.data, decryptionError: error.message }
+        } else if (rawData.data.content) {
+          // Regular message with encrypted content field
+          try {
+            console.log('🔓 [READ] Decrypting content for entity:', entity.entityKey)
+            encryptedContentString = rawData.data.content  // Store encrypted content for display
+            
+            // Decrypt only the content field
+            const decryptedContent = await decryptData(rawData.data.content)
+            decryptedContentString = decryptedContent
+            
+            // Replace encrypted content with decrypted content
+            decryptedData = {
+              ...rawData.data,
+              content: decryptedContent  // Decrypted content
+            }
+            
+            console.log('✅ [READ] Successfully decrypted content for entity:', entity.entityKey)
+          } catch (error: any) {
+            console.error('❌ [READ] Failed to decrypt content:', error)
+            decryptedData = { ...rawData.data, decryptionError: error.message }
+          }
+        } else {
+          // Encrypted but no known encrypted fields, use as-is
+          decryptedData = rawData.data
         }
       } else {
         // No encryption, use data as-is
@@ -493,16 +651,20 @@ export async function updateMessageInArkiv(
       data: updatedPayload
     }
 
-    // Update entity using new SDK API
-    const { entityKey: updatedKey } = await walletClient.updateEntity({
-      entityKey: entityKey as `0x${string}`,
-      payload: jsonToPayload(encryptedPayload),
-      contentType: 'application/json',
-      attributes: [
-        { key: 'type', value: messageType },
-        { key: 'updated', value: String(Date.now()) }
-      ],
-      expiresIn: ExpirationTime.fromHours(expiresInHours),
+    // Queue the transaction to prevent "replacement transaction underpriced" errors
+    console.log('⏳ [UPDATE] Queuing transaction to prevent conflicts...')
+    const { entityKey: updatedKey } = await queueTransaction(async () => {
+      // Update entity using new SDK API
+      return await walletClient.updateEntity({
+        entityKey: entityKey as `0x${string}`,
+        payload: jsonToPayload(encryptedPayload),
+        contentType: 'application/json',
+        attributes: [
+          { key: 'type', value: messageType },
+          { key: 'updated', value: String(Date.now()) }
+        ],
+        expiresIn: ExpirationTime.fromHours(expiresInHours),
+      })
     })
 
     console.log('✅ [UPDATE] Entity updated successfully:', updatedKey)
@@ -532,9 +694,13 @@ export async function deleteMessageFromArkiv(
 
     console.log('🗑️ [DELETE] Deleting entity...', { entityKey })
 
-    // Delete entity using new SDK API
-    await walletClient.deleteEntity({
-      entityKey: entityKey as `0x${string}`,
+    // Queue the transaction to prevent "replacement transaction underpriced" errors
+    console.log('⏳ [DELETE] Queuing transaction to prevent conflicts...')
+    await queueTransaction(async () => {
+      // Delete entity using new SDK API
+      return await walletClient.deleteEntity({
+        entityKey: entityKey as `0x${string}`,
+      })
     })
     
     console.log('✅ [DELETE] Entity deleted successfully:', entityKey)
@@ -566,10 +732,14 @@ export async function extendMessageInArkiv(
 
     console.log('⏰ [EXTEND] Extending entity lifetime...', { entityKey, additionalHours })
 
-    // Extend entity using new SDK API
-    const { entityKey: extendedKey } = await walletClient.extendEntity({
-      entityKey: entityKey as `0x${string}`,
-      expiresIn: ExpirationTime.fromHours(additionalHours),
+    // Queue the transaction to prevent "replacement transaction underpriced" errors
+    console.log('⏳ [EXTEND] Queuing transaction to prevent conflicts...')
+    const { entityKey: extendedKey } = await queueTransaction(async () => {
+      // Extend entity using new SDK API
+      return await walletClient.extendEntity({
+        entityKey: entityKey as `0x${string}`,
+        expiresIn: ExpirationTime.fromHours(additionalHours),
+      })
     })
 
     console.log('✅ [EXTEND] Entity lifetime extended successfully:', {

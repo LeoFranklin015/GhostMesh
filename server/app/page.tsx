@@ -5,6 +5,7 @@ import Dexie from 'dexie'
 import { 
   initializeArkivClient,
   storeMessageToArkiv,
+  storeSensorDataToArkiv,
   readMessagesFromArkiv,
   updateMessageInArkiv,
   deleteMessageFromArkiv,
@@ -48,6 +49,8 @@ export default function ServerPage() {
     details?: any
   }>>([])
   const [error, setError] = useState<string | null>(null)
+  const [showStatusModal, setShowStatusModal] = useState(false)
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false)
   const dmDB = useRef<Dexie | null>(null)
   const cipherRef = useRef<any>(null)
 
@@ -227,6 +230,19 @@ export default function ServerPage() {
                   const timestamp = new Date().toISOString()
                   const fromPublicKey = e.pubKey ? e.pubKey.substring(0, 20) + '...' : 'unknown'
                   
+                  // Try to parse as sensor data format
+                  let sensorData: any = null
+                  try {
+                    const parsed = JSON.parse(decryptedText)
+                    if (parsed.type === 'sensor_data' && parsed.temperature && parsed.humidity) {
+                      sensorData = parsed
+                      console.log('📊 [SENSOR] Detected sensor_data format:', sensorData)
+                    }
+                  } catch (parseErr) {
+                    // Not sensor data format, continue with normal message handling
+                    console.log('ℹ️ [MAIN] Not sensor_data format, treating as regular message')
+                  }
+                  
                   // Store message in state with Arkiv status (existing functionality + new)
                   setMessages(prev => [...prev, {
                     timestamp,
@@ -235,15 +251,70 @@ export default function ServerPage() {
                     arkivStatus: 'storing'
                   }])
                   
-                  // Encrypt and store message to Arkiv (new functionality - non-blocking)
-                  // storeMessageToArkiv automatically encrypts with key from env before storing
-                  console.log('🔒 [MAIN] XX Network message will be encrypted with key before storing to Arkiv...')
-                  storeMessageToArkiv({
-                    content: decryptedText,
-                    from: e.pubKey || 'unknown',
-                    timestamp,
-                    uuid: e.uuid
-                  }).then((result) => {
+                  // Handle sensor data format with encrypted temperature and humidity
+                  if (sensorData) {
+                    console.log('🔒 [SENSOR] Storing sensor data with encrypted temperature and humidity...')
+                    storeSensorDataToArkiv(
+                      {
+                        type: sensorData.type,
+                        timestamp: sensorData.timestamp || timestamp,
+                        temperature: String(sensorData.temperature),
+                        humidity: String(sensorData.humidity),
+                        pin: sensorData.pin || 0,
+                        sensorType: sensorData.sensorType || 'DHT11'
+                      },
+                      e.pubKey || 'unknown',
+                      e.uuid
+                    ).then((result) => {
+                      // Update message with Arkiv storage result (find by timestamp)
+                      setMessages(prev => {
+                        return prev.map(msg => {
+                          if (msg.timestamp === timestamp && msg.arkivStatus === 'storing') {
+                            return {
+                              ...msg,
+                              arkivStatus: result.success ? 'stored' : 'failed',
+                              arkivEntityKey: result.entityKey,
+                              arkivError: result.error
+                            }
+                          }
+                          return msg
+                        })
+                      })
+                      
+                      if (result.success) {
+                        console.log('✅ Sensor data stored to Arkiv:', result.entityKey)
+                        addCrudLog('CREATE', 'success', `Sensor data stored to Arkiv (temperature & humidity encrypted)`, result.entityKey)
+                      } else {
+                        console.warn('⚠️ Sensor data storage failed:', result.error)
+                        addCrudLog('CREATE', 'error', `Sensor data storage failed: ${result.error}`)
+                      }
+                    }).catch((err) => {
+                      // Update message with error status (find by timestamp)
+                      setMessages(prev => {
+                        return prev.map(msg => {
+                          if (msg.timestamp === timestamp && msg.arkivStatus === 'storing') {
+                            return {
+                              ...msg,
+                              arkivStatus: 'failed',
+                              arkivError: err.message || String(err)
+                            }
+                          }
+                          return msg
+                        })
+                      })
+                      console.error('⚠️ Sensor data storage failed (non-critical):', err)
+                      addCrudLog('CREATE', 'error', `Sensor data storage failed: ${err.message || String(err)}`)
+                    })
+                  } else {
+                    // Encrypt and store regular message to Arkiv (non-blocking)
+                    // storeMessageToArkiv automatically encrypts with key from env before storing
+                    console.log('🔒 [MAIN] XX Network message will be encrypted with key before storing to Arkiv...')
+                    storeMessageToArkiv({
+                      content: decryptedText,
+                      from: e.pubKey || 'unknown',
+                      timestamp,
+                      uuid: e.uuid
+                    }).then((result) => {
                     // Update message with Arkiv storage result (find by timestamp)
                     setMessages(prev => {
                       return prev.map(msg => {
@@ -283,6 +354,7 @@ export default function ServerPage() {
                     console.error('⚠️ Arkiv storage failed (non-critical):', err)
                     addCrudLog('CREATE', 'error', `Storage failed: ${err.message || String(err)}`)
                   })
+                  }
                 }).catch((err) => {
                   console.error('❌ Error querying/decrypting message:', err)
                   if (attempt < maxAttempts) {
@@ -373,88 +445,53 @@ export default function ServerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 text-white">
+      <div className="max-w-7xl mx-auto p-6 space-y-6">
         {/* Header */}
-        <div className="text-center space-y-2">
-          <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600">
+        <div className="text-center space-y-3 pt-4">
+          <h1 className="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-500">
             🟢 XX Network Server
           </h1>
-          <p className="text-slate-400">Powered by xxdk-wasm in Next.js</p>
+          <p className="text-gray-400 text-sm md:text-base">Powered by xxdk-wasm in Next.js</p>
         </div>
 
-        {/* Status Card */}
-        {/* Navigation */}
-        <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-lg p-4 mb-6">
-          <div className="flex gap-4">
-            <a
-              href="/"
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-white text-sm"
-            >
-              🏠 Server Dashboard
-            </a>
-            <a
-              href="/alldatas"
-              className="px-4 py-2 bg-purple-700 hover:bg-purple-600 rounded text-white text-sm"
-            >
-              📊 View All Data (API)
-            </a>
-          </div>
-        </div>
-
-        <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-lg p-6">
-          <h2 className="text-xl font-semibold mb-4">📊 Server Status</h2>
-          <div className="flex items-center space-x-3">
-            <div className={`w-3 h-3 rounded-full animate-pulse ${
-              status.includes('✅ SERVER READY') ? 'bg-green-500' :
-              status.includes('❌') ? 'bg-red-500' :
-              'bg-yellow-500'
+        {/* Small Status and Credentials Buttons */}
+        <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
+          {/* Status Button */}
+          <button
+            onClick={() => setShowStatusModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600/80 hover:bg-indigo-600 border border-indigo-500/50 rounded-lg transition-all hover:scale-105 shadow-lg hover:shadow-indigo-500/50"
+          >
+            <div className={`w-2.5 h-2.5 rounded-full ${
+              status.includes('✅ SERVER READY') ? 'bg-emerald-400 animate-pulse' :
+              status.includes('❌') ? 'bg-red-400' :
+              'bg-yellow-400 animate-pulse'
             }`} />
-            <p className="font-mono text-sm">{status}</p>
-          </div>
-          
-          {/* Arkiv Status */}
-          <div className="mt-4 space-y-2">
-            <div className="flex items-center space-x-3">
-              <div className={`w-3 h-3 rounded-full ${
-                arkivStatus === 'ready' ? 'bg-green-500' :
-                arkivStatus === 'not-configured' ? 'bg-yellow-500' :
-                arkivStatus === 'error' ? 'bg-red-500' :
-                'bg-gray-500 animate-pulse'
-              }`} />
-              <p className="text-sm text-slate-300">
-                Arkiv Storage (Private Key): {
-                  arkivStatus === 'ready' ? '✅ Ready' :
-                  arkivStatus === 'not-configured' ? '⚠️ Not configured' :
-                  arkivStatus === 'error' ? '❌ Error' :
-                  '🔄 Initializing...'
-                }
-              </p>
-            </div>
-            
-            {arkivStatus === 'not-configured' && (
-              <div className="ml-6 text-xs text-yellow-400 space-y-1">
-                <div>⚠️ Please set <code className="bg-yellow-900/50 px-1 rounded">NEXT_PUBLIC_ARKIV_PRIVATE_KEY</code> in your <code className="bg-yellow-900/50 px-1 rounded">.env.local</code> file.</div>
-                <div className="text-yellow-500/80 mt-1">Note: Since this runs in the browser, you must use the <code className="bg-yellow-900/50 px-1 rounded">NEXT_PUBLIC_</code> prefix.</div>
-              </div>
-            )}
-            
-            {arkivStatus === 'error' && (
-              <div className="ml-6 text-xs text-red-400">
-                ❌ Failed to initialize Arkiv client. Check console for details.
-              </div>
-            )}
-          </div>
-          
-          {error && (
-            <div className="mt-4 p-4 bg-red-900/30 border border-red-500 rounded-lg">
-              <p className="text-red-400 text-sm">{error}</p>
-            </div>
+            <span className="text-sm font-medium">📊 Status</span>
+          </button>
+
+          {/* Credentials Button */}
+          {credentials ? (
+            <button
+              onClick={() => setShowCredentialsModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600/80 hover:bg-emerald-600 border border-emerald-500/50 rounded-lg transition-all hover:scale-105 shadow-lg hover:shadow-emerald-500/50"
+            >
+              <span className="text-sm">✅</span>
+              <span className="text-sm font-medium">🔑 Credentials</span>
+            </button>
+          ) : (
+            <button
+              disabled
+              className="flex items-center gap-2 px-4 py-2 bg-gray-700/50 border border-gray-600 rounded-lg opacity-50 cursor-not-allowed"
+            >
+              <span className="text-sm">⏳</span>
+              <span className="text-sm font-medium">🔑 Credentials</span>
+            </button>
           )}
         </div>
 
         {/* Testing Section */}
-        <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-lg p-6">
+        <div className="bg-gray-800/40 backdrop-blur border border-cyan-500/30 rounded-xl p-6">
           <h2 className="text-xl font-semibold mb-4">🧪 Test Encryption/Decryption & Arkiv Storage</h2>
           <div className="space-y-4">
             <div>
@@ -507,7 +544,7 @@ export default function ServerPage() {
                     addCrudLog('CREATE', 'error', `Test storage failed: ${error.message}`)
                   }
                 }}
-                className="px-4 py-2 bg-purple-700 hover:bg-purple-600 rounded text-sm"
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition"
               >
                 💾 Store to Arkiv
               </button>
@@ -578,7 +615,7 @@ export default function ServerPage() {
                     addCrudLog('READ', 'error', `Test read failed: ${error.message}`)
                   }
                 }}
-                className="px-4 py-2 bg-cyan-700 hover:bg-cyan-600 rounded text-sm"
+                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg text-sm transition"
               >
                 📖 Read from Arkiv
               </button>
@@ -593,7 +630,7 @@ export default function ServerPage() {
                   setTestEncryptedData(null)
                   setTestDecryptedData(null)
                 }}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm"
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition"
               >
                 🗑️ Clear
               </button>
@@ -692,7 +729,7 @@ export default function ServerPage() {
 
         {/* Read Messages from Arkiv Display */}
         {readMessages.length > 0 && (
-          <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-lg p-6">
+          <div className="bg-gray-800/40 backdrop-blur border border-cyan-500/30 rounded-xl p-6">
             <h2 className="text-xl font-semibold mb-4">
               📖 Messages Read from Arkiv ({readMessages.length})
             </h2>
@@ -768,43 +805,19 @@ export default function ServerPage() {
           </div>
         )}
 
-        {/* Credentials Card */}
-        {credentials && (
-          <div className="bg-gradient-to-br from-purple-900/50 to-pink-900/50 backdrop-blur border border-purple-500 rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">🔑 Server Credentials</h2>
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm text-slate-400 mb-1">Token:</p>
-                <p className="font-mono text-lg bg-slate-900/50 p-3 rounded border border-slate-700">
-                  {credentials.token}
-                </p>
+        {/* Centered Received Messages */}
+        <div className="w-full flex justify-center">
+          {messages.length > 0 ? (
+            <div className="w-full max-w-4xl bg-gradient-to-br from-indigo-900/40 via-blue-900/40 to-cyan-900/40 backdrop-blur border-2 border-cyan-500/60 rounded-2xl p-8 shadow-2xl">
+              <div className="text-center mb-6">
+                <h2 className="text-3xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400">
+                  📨 Received Messages
+                </h2>
+                <p className="text-gray-400 text-sm">Total: {messages.length} message{messages.length !== 1 ? 's' : ''}</p>
               </div>
-              <div>
-                <p className="text-sm text-slate-400 mb-1">Public Key:</p>
-                <p className="font-mono text-sm bg-slate-900/50 p-3 rounded border border-slate-700 break-all">
-                  {credentials.publicKey}
-                </p>
-              </div>
-              <div className="bg-blue-900/30 border border-blue-500 rounded-lg p-4">
-                <p className="text-blue-300 text-sm">
-                  ℹ️ <strong>Use these credentials</strong> in your client at{' '}
-                  <code className="bg-blue-950 px-2 py-1 rounded">http://localhost:3000</code>{' '}
-                  to send messages to this server
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Messages Card */}
-        {messages.length > 0 && (
-          <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">
-              📨 Received Messages ({messages.length})
-            </h2>
-            <div className="space-y-3 max-h-96 overflow-y-auto">
+              <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
               {messages.map((msg, i) => (
-                <div key={i} className="bg-slate-900/50 border border-slate-600 rounded-lg p-4">
+                <div key={i} className="bg-gray-900/60 border border-cyan-500/30 rounded-xl p-4 hover:border-cyan-500/50 transition">
                   <div className="flex justify-between items-start mb-2">
                     <p className="text-xs text-slate-500">
                       {new Date(msg.timestamp).toLocaleString()}
@@ -972,13 +985,20 @@ export default function ServerPage() {
                   )}
                 </div>
               ))}
+              </div>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="w-full max-w-4xl bg-gray-800/30 backdrop-blur border-2 border-dashed border-cyan-500/30 rounded-2xl p-12 text-center">
+              <div className="text-6xl mb-4">📭</div>
+              <h2 className="text-2xl font-bold text-gray-300 mb-2">No Messages Yet</h2>
+              <p className="text-gray-400">Waiting for incoming messages...</p>
+            </div>
+          )}
+        </div>
 
         {/* CRUD Operations Log */}
         {crudLogs.length > 0 && (
-          <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-lg p-6">
+          <div className="bg-gray-800/40 backdrop-blur border border-cyan-500/30 rounded-xl p-6">
             <h2 className="text-xl font-semibold mb-4">
               📋 Arkiv CRUD Operations Log ({crudLogs.length})
             </h2>
@@ -1045,42 +1065,179 @@ export default function ServerPage() {
           </div>
         )}
 
-        {/* Instructions Card */}
-        <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-lg p-6">
-          <h2 className="text-xl font-semibold mb-4">📖 How to Use</h2>
-          <ol className="space-y-2 text-sm text-slate-300">
-            <li className="flex items-start">
-              <span className="bg-purple-600 text-white w-6 h-6 rounded-full flex items-center justify-center mr-3 flex-shrink-0">1</span>
-              <span>Wait for server to initialize (shows credentials above)</span>
-            </li>
-            <li className="flex items-start">
-              <span className="bg-purple-600 text-white w-6 h-6 rounded-full flex items-center justify-center mr-3 flex-shrink-0">2</span>
-              <span>Copy the <strong>Token</strong> and <strong>Public Key</strong></span>
-            </li>
-            <li className="flex items-start">
-              <span className="bg-purple-600 text-white w-6 h-6 rounded-full flex items-center justify-center mr-3 flex-shrink-0">3</span>
-              <span>Open your client at <code className="bg-slate-900 px-2 py-1 rounded">http://localhost:3000</code></span>
-            </li>
-            <li className="flex items-start">
-              <span className="bg-purple-600 text-white w-6 h-6 rounded-full flex items-center justify-center mr-3 flex-shrink-0">4</span>
-              <span>Paste the credentials and send messages</span>
-            </li>
-            <li className="flex items-start">
-              <span className="bg-purple-600 text-white w-6 h-6 rounded-full flex items-center justify-center mr-3 flex-shrink-0">5</span>
-              <span>Messages will appear in the "Received Messages" section above</span>
-            </li>
-          </ol>
-        </div>
 
-        {/* API Info */}
-        <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-lg p-6">
-          <h2 className="text-xl font-semibold mb-4">🔌 API Endpoints</h2>
-          <div className="space-y-2 text-sm font-mono">
-            <p><span className="text-green-400">GET</span> <span className="text-purple-400">/api/status</span> - Check server status</p>
-            <p><span className="text-green-400">GET</span> <span className="text-purple-400">/api/credentials</span> - Get server credentials</p>
-            <p><span className="text-green-400">GET</span> <span className="text-purple-400">/api/messages</span> - Get received messages</p>
+        {/* Status Modal */}
+        {showStatusModal && (
+          <div 
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowStatusModal(false)}
+          >
+            <div 
+              className="bg-gradient-to-br from-gray-800 via-indigo-900 to-gray-900 rounded-2xl border-2 border-cyan-500/60 p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400">
+                  📊 Server Status
+                </h2>
+                <button
+                  onClick={() => setShowStatusModal(false)}
+                  className="text-slate-400 hover:text-white text-2xl transition"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                {/* Main Status */}
+                <div className="bg-slate-900/50 rounded-xl p-6 border border-slate-700">
+                  <div className="flex items-center space-x-4 mb-4">
+                    <div className={`w-4 h-4 rounded-full ${
+                      status.includes('✅ SERVER READY') ? 'bg-green-500 animate-pulse' :
+                      status.includes('❌') ? 'bg-red-500' :
+                      'bg-yellow-500 animate-pulse'
+                    }`} />
+                    <h3 className="text-lg font-semibold">Current Status</h3>
+                  </div>
+                  <p className="font-mono text-sm text-slate-300">{status}</p>
+                </div>
+
+                {/* Arkiv Status */}
+                <div className="bg-slate-900/50 rounded-xl p-6 border border-slate-700">
+                  <div className="flex items-center space-x-4 mb-4">
+                    <div className={`w-4 h-4 rounded-full ${
+                      arkivStatus === 'ready' ? 'bg-green-500' :
+                      arkivStatus === 'not-configured' ? 'bg-yellow-500' :
+                      arkivStatus === 'error' ? 'bg-red-500' :
+                      'bg-gray-500 animate-pulse'
+                    }`} />
+                    <h3 className="text-lg font-semibold">Arkiv Storage</h3>
+                  </div>
+                  <p className="text-sm text-slate-300 mb-4">
+                    Status: {
+                      arkivStatus === 'ready' ? '✅ Ready' :
+                      arkivStatus === 'not-configured' ? '⚠️ Not configured' :
+                      arkivStatus === 'error' ? '❌ Error' :
+                      '🔄 Initializing...'
+                    }
+                  </p>
+                  
+                  {arkivStatus === 'not-configured' && (
+                    <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-4 text-xs text-yellow-300 space-y-2">
+                      <div>⚠️ Please set <code className="bg-yellow-900/50 px-1 rounded">NEXT_PUBLIC_ARKIV_PRIVATE_KEY</code> in your <code className="bg-yellow-900/50 px-1 rounded">.env.local</code> file.</div>
+                      <div className="text-yellow-400/80 mt-1">Note: Since this runs in the browser, you must use the <code className="bg-yellow-900/50 px-1 rounded">NEXT_PUBLIC_</code> prefix.</div>
+                    </div>
+                  )}
+                  
+                  {arkivStatus === 'error' && (
+                    <div className="bg-red-900/20 border border-red-700/50 rounded-lg p-4 text-xs text-red-300">
+                      ❌ Failed to initialize Arkiv client. Check console for details.
+                    </div>
+                  )}
+                </div>
+
+                {/* Error Display */}
+                {error && (
+                  <div className="bg-red-900/30 border border-red-500 rounded-xl p-6">
+                    <h3 className="text-lg font-semibold text-red-400 mb-2">⚠️ Error</h3>
+                    <p className="text-red-300 text-sm font-mono">{error}</p>
+                  </div>
+                )}
+
+                {/* Close Button */}
+                <button
+                  onClick={() => setShowStatusModal(false)}
+                  className="w-full bg-indigo-600 hover:bg-indigo-500 rounded-lg py-3 text-white font-semibold transition"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Credentials Modal */}
+        {showCredentialsModal && credentials && (
+          <div 
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowCredentialsModal(false)}
+          >
+            <div 
+              className="bg-gradient-to-br from-emerald-900 via-cyan-900 to-indigo-900 rounded-2xl border-2 border-emerald-500/60 p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-300 via-cyan-300 to-blue-300">
+                  🔑 Server Credentials
+                </h2>
+                <button
+                  onClick={() => setShowCredentialsModal(false)}
+                  className="text-slate-400 hover:text-white text-2xl transition"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                {/* Token */}
+                <div className="bg-gray-900/60 rounded-xl p-6 border border-emerald-500/50">
+                  <h3 className="text-lg font-semibold mb-3 flex items-center">
+                    Token
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(String(credentials.token))
+                        alert('Token copied to clipboard!')
+                      }}
+                      className="ml-auto px-3 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-sm transition"
+                    >
+                      📋 Copy
+                    </button>
+                  </h3>
+                  <p className="font-mono text-2xl text-white bg-gray-800/50 p-4 rounded-lg border border-gray-700 break-all">
+                    {credentials.token}
+                  </p>
+                </div>
+
+                {/* Public Key */}
+                <div className="bg-gray-900/60 rounded-xl p-6 border border-emerald-500/50">
+                  <h3 className="text-lg font-semibold mb-3 flex items-center">
+                    Public Key
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(credentials.publicKey)
+                        alert('Public Key copied to clipboard!')
+                      }}
+                      className="ml-auto px-3 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-sm transition"
+                    >
+                      📋 Copy
+                    </button>
+                  </h3>
+                  <p className="font-mono text-sm text-white bg-gray-800/50 p-4 rounded-lg border border-gray-700 break-all">
+                    {credentials.publicKey}
+                  </p>
+                </div>
+
+                {/* Instructions */}
+                <div className="bg-cyan-900/30 border border-cyan-500/50 rounded-xl p-6">
+                  <h3 className="text-lg font-semibold text-cyan-300 mb-2">ℹ️ How to Use</h3>
+                  <p className="text-cyan-200 text-sm">
+                    Copy the <strong>Token</strong> and <strong>Public Key</strong> above and use them in your client at{' '}
+                    <code className="bg-cyan-950 px-2 py-1 rounded">http://localhost:3000</code>{' '}
+                    to send messages to this server.
+                  </p>
+                </div>
+
+                {/* Close Button */}
+                <button
+                  onClick={() => setShowCredentialsModal(false)}
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 rounded-lg py-3 text-white font-semibold transition"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
