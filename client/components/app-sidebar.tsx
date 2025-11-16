@@ -15,25 +15,25 @@ import {
 
 const sensorTypes = [
   {
-    title: "Weather",
+    title: "humidity",
     icon: Cloud,
     color: "#3B82F6",
     count: 145,
   },
   {
-    title: "Temperature",
+    title: "temp",
     icon: Thermometer,
     color: "#EF4444",
     count: 203,
   },
   {
-    title: "Carbon Credits",
+    title: "carbon",
     icon: Leaf,
     color: "#10B981",
     count: 89,
   },
   {
-    title: "Air Quality",
+    title: "air",
     icon: Wind,
     color: "#8B5CF6",
     count: 167,

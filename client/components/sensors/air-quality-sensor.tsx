@@ -7,8 +7,8 @@ import { generateSensorTimeSeriesData, getSensorStats } from "@/lib/sensor-data"
 import { useMemo } from "react"
 
 export function AirQualitySensor() {
-  const timeSeriesData = useMemo(() => generateSensorTimeSeriesData("Air Quality", 24), [])
-  const stats = useMemo(() => getSensorStats("Air Quality"), [])
+  const timeSeriesData = useMemo(() => generateSensorTimeSeriesData("air", 24), [])
+  const stats = useMemo(() => getSensorStats("air"), [])
   
   // Calculate AQI category distribution
   const categoryData = useMemo(() => {

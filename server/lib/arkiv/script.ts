@@ -1,11 +1,45 @@
 /**
  * Script to insert sensor data into Arkiv with encryption
- * Usage: ts-node server/lib/arkiv/script.ts
+ * Usage: npm run insert-sensor-data
  */
+
+// Load environment variables from .env.local
+import * as dotenv from 'dotenv'
+import * as path from 'path'
+import * as fs from 'fs'
+
+// Try loading .env or .env.local from multiple locations
+const envPaths = [
+  path.join(__dirname, '..', '..', '.env.local'),        // server/.env.local
+  path.join(__dirname, '..', '..', '.env'),              // server/.env
+  path.join(__dirname, '..', '..', '..', '.env.local'),  // root/.env.local
+  path.join(__dirname, '..', '..', '..', '.env'),        // root/.env
+  path.join(process.cwd(), '.env.local'),                 // Current working dir .env.local
+  path.join(process.cwd(), '.env'),                       // Current working dir .env
+  path.join(process.cwd(), '..', '.env.local'),           // Parent of cwd .env.local
+  path.join(process.cwd(), '..', '.env'),                 // Parent of cwd .env
+]
+
+let envLoaded = false
+for (const envPath of envPaths) {
+  if (fs.existsSync(envPath)) {
+    console.log(`📄 Loading environment from: ${envPath}`)
+    const result = dotenv.config({ path: envPath })
+    if (!result.error) {
+      envLoaded = true
+      console.log(`✅ Loaded environment variables from: ${envPath}\n`)
+      break
+    }
+  }
+}
+
+if (!envLoaded) {
+  console.log('⚠️  No .env or .env.local file found in common locations')
+  console.log('💡 Make sure .env or .env.local exists with ARKIV_PRIVATE_KEY\n')
+}
 
 import { storeMessageToArkiv, initializeArkivClient } from './index'
 import * as fs from 'fs'
-import * as path from 'path'
 
 interface SensorDataEntry {
   data: {

@@ -12,16 +12,16 @@ export interface SensorDBData {
 // Generate realistic sensor values
 function generateSensorValue(type: string): string {
   switch (type) {
-    case "Weather":
+    case "humidity":
       // Humidity percentage (30-90%)
       return (30 + Math.random() * 60).toFixed(0)
-    case "Temperature":
+    case "temp":
       // Temperature in Celsius (15-35°C)
       return (15 + Math.random() * 20).toFixed(1)
-    case "Carbon Credits":
+    case "carbon":
       // Carbon offset in kg (100-500kg)
       return (100 + Math.random() * 400).toFixed(0)
-    case "Air Quality":
+    case "air":
       // AQI (20-150)
       return (20 + Math.random() * 130).toFixed(0)
     default:
@@ -57,7 +57,7 @@ export function generateSensorReadings(
 
 // Generate all sensor types
 export function generateAllSensorData(countPerType: number = 50): Record<string, SensorDBData[]> {
-  const sensorTypes = ["Weather", "Temperature", "Carbon Credits", "Air Quality"]
+  const sensorTypes = ["humidity", "temp", "carbon", "air"]
   const allData: Record<string, SensorDBData[]> = {}
   
   sensorTypes.forEach(type => {

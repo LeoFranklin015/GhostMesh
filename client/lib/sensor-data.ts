@@ -40,19 +40,19 @@ export function generateSensorTimeSeriesData(type: string, hours: number = 24) {
     
     // Generate realistic values based on sensor type
     switch (type) {
-      case "Weather":
+      case "humidity":
         // Humidity percentage (30-90%)
         value = 50 + Math.sin(i / 4) * 20 + Math.random() * 10
         break
-      case "Temperature":
+      case "temp":
         // Temperature in Celsius (15-35°C)
         value = 22 + Math.sin(i / 3) * 8 + Math.random() * 5
         break
-      case "Carbon Credits":
+      case "carbon":
         // Carbon offset in kg (100-500kg)
         value = 250 + Math.sin(i / 6) * 100 + Math.random() * 50
         break
-      case "Air Quality":
+      case "air":
         // AQI (0-200)
         value = 75 + Math.sin(i / 5) * 40 + Math.random() * 20
         break
@@ -80,16 +80,16 @@ export function generateSensorEntities(type: string, count: number = 10): Sensor
     let content: string
     
     switch (type) {
-      case "Weather":
+      case "humidity":
         content = (50 + Math.random() * 40).toFixed(0)
         break
-      case "Temperature":
+      case "temp":
         content = (20 + Math.random() * 15).toFixed(1)
         break
-      case "Carbon Credits":
+      case "carbon":
         content = (200 + Math.random() * 300).toFixed(0)
         break
-      case "Air Quality":
+      case "air":
         content = (50 + Math.random() * 100).toFixed(0)
         break
       default:
@@ -141,13 +141,13 @@ export function getSensorStats(type: string) {
 // Get unit for sensor type
 export function getUnitForType(type: string): string {
   switch (type) {
-    case "Weather":
+    case "humidity":
       return "%"
-    case "Temperature":
+    case "temp":
       return "°C"
-    case "Carbon Credits":
+    case "carbon":
       return "kg CO₂"
-    case "Air Quality":
+    case "air":
       return "AQI"
     default:
       return ""
@@ -157,13 +157,13 @@ export function getUnitForType(type: string): string {
 // Get color for sensor type
 export function getColorForType(type: string): string {
   switch (type) {
-    case "Weather":
+    case "humidity":
       return "#3B82F6"
-    case "Temperature":
+    case "temp":
       return "#EF4444"
-    case "Carbon Credits":
+    case "carbon":
       return "#10B981"
-    case "Air Quality":
+    case "air":
       return "#8B5CF6"
     default:
       return "#FF6B00"

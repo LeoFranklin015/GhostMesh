@@ -9,7 +9,7 @@ import { useMemo } from "react"
 export function CarbonSensor() {
   const chartData = useMemo(() => {
     // Generate hourly data but group by 4-hour blocks for bars
-    const hourlyData = generateSensorTimeSeriesData("Carbon Credits", 24)
+    const hourlyData = generateSensorTimeSeriesData("carbon", 24)
     const groupedData = []
     
     for (let i = 0; i < hourlyData.length; i += 4) {
@@ -27,7 +27,7 @@ export function CarbonSensor() {
     return groupedData
   }, [])
   
-  const stats = useMemo(() => getSensorStats("Carbon Credits"), [])
+  const stats = useMemo(() => getSensorStats("carbon"), [])
   const totalOffset = useMemo(() => {
     return chartData.reduce((acc, curr) => acc + curr.value, 0)
   }, [chartData])

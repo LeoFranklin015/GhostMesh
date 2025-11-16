@@ -7,8 +7,8 @@ import { generateSensorTimeSeriesData, getSensorStats } from "@/lib/sensor-data"
 import { useMemo } from "react"
 
 export function WeatherSensor() {
-  const chartData = useMemo(() => generateSensorTimeSeriesData("Weather", 24), [])
-  const stats = useMemo(() => getSensorStats("Weather"), [])
+  const chartData = useMemo(() => generateSensorTimeSeriesData("humidity", 24), [])
+  const stats = useMemo(() => getSensorStats("humidity"), [])
 
   const formatXAxis = (timestamp: string) => {
     const date = new Date(timestamp)
