@@ -30,11 +30,25 @@ function getSensor() {
 }
 
 // State for natural random walk simulation
-let currentTemperature = 22.5; // Starting temperature in °C
-let currentHumidity = 55.0;    // Starting humidity in %
+// Use null initially to detect if state was reset (serverless environments can reset module state)
+let currentTemperature: number | null = null;
+let currentHumidity: number | null = null;
 
 // Generate natural-looking mock sensor data using random walk
 function generateMockSensorData() {
+  // CRITICAL: Check if state was reset (can happen in serverless/Next.js environments)
+  // If values are null, 0, or NaN, reinitialize with realistic random values
+  if (currentTemperature === null || currentTemperature === 0 || !isFinite(currentTemperature)) {
+    currentTemperature = 22.0 + (Math.random() * 4); // 22-26°C
+  }
+  if (currentHumidity === null || currentHumidity === 0 || !isFinite(currentHumidity)) {
+    currentHumidity = 45.0 + (Math.random() * 15); // 45-60%
+  }
+  
+  // Ensure values are within valid ranges before processing
+  currentTemperature = Math.max(20.0, Math.min(28.0, currentTemperature));
+  currentHumidity = Math.max(40.0, Math.min(65.0, currentHumidity));
+  
   // Natural temperature variation: small random walk (±0.5°C max change per reading)
   // Temperature tends to stay in comfortable range (20-28°C)
   const tempChange = (Math.random() - 0.5) * 1.0; // -0.5 to +0.5
@@ -52,8 +66,21 @@ function generateMockSensorData() {
   const tempNoise = (Math.random() - 0.5) * 0.2;
   const humidityNoise = (Math.random() - 0.5) * 0.5;
   
-  const finalTemp = currentTemperature + tempNoise;
-  const finalHumidity = currentHumidity + humidityNoise;
+  let finalTemp = currentTemperature + tempNoise;
+  let finalHumidity = currentHumidity + humidityNoise;
+  
+  // FINAL SAFETY CHECK: Ensure values are NEVER 0 or invalid
+  // This prevents 0.00 values even if something goes wrong
+  finalTemp = Math.max(20.0, Math.min(28.0, finalTemp));
+  finalHumidity = Math.max(40.0, Math.min(65.0, finalHumidity));
+  
+  // Double-check before returning - values must be valid numbers
+  if (!isFinite(finalTemp) || finalTemp <= 0) {
+    finalTemp = 22.5; // Fallback safe value
+  }
+  if (!isFinite(finalHumidity) || finalHumidity <= 0) {
+    finalHumidity = 55.0; // Fallback safe value
+  }
   
   return {
     temperature: finalTemp,
