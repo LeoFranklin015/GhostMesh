@@ -8,7 +8,7 @@ export default function Home() {
       <h1 className="text-3xl font-bold">🔵 CLIENT 2</h1>
       <XXNetwork>
       <XXDirectMessages>
-        {/* Display this client's credentials */}
+        {/* Display this client's credential */}
         <div className="w-4/5 mb-4">
           <XXMyCredentials />
         </div>

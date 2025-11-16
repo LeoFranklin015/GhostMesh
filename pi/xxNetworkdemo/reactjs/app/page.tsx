@@ -1,11 +1,18 @@
 
 import {Input, Button} from "@nextui-org/react";
 import { XXNetwork, XXLogs, XXDirectMessages, XXDirectMessagesReceived, XXDMSend, XXMsgSender, XXMyCredentials } from "./xxdk";
+import DHT11Sensor from "./components/DHT11Sensor";
 
 export default function Home() {
   return (
     <main className="flex flex-col min-h-screen items-center p-10 space-y-4">
       <h1 className="text-3xl font-bold">🟢 CLIENT 1</h1>
+      
+      {/* DHT11 Sensor Readings */}
+      <div className="w-4/5 mb-4">
+        <DHT11Sensor pin={4} autoRefresh={true} refreshInterval={5000} retries={3} />
+      </div>
+
       <XXNetwork>
       <XXDirectMessages>
         {/* Display this client's credentials */}
