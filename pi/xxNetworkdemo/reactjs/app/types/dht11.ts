@@ -15,7 +15,6 @@ export interface DHT11SensorData {
   error?: string;
   details?: string;
   note?: string;
-  demo?: boolean; // Indicates if running in demo mode (sensor not available)
 }
 
 export interface DHT11SensorConfig {

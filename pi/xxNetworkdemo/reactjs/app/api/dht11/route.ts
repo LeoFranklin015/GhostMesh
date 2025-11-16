@@ -93,8 +93,7 @@ export async function GET(request: NextRequest) {
         humidityPercent: mockData.humidity,
         pin: pin,
         sensorType: 'DHT11',
-        timestamp: new Date().toISOString(),
-        mock: true
+        timestamp: new Date().toISOString()
       };
 
       return NextResponse.json(result);
@@ -152,9 +151,7 @@ export async function GET(request: NextRequest) {
         humidityPercent: mockData.humidity,
         pin: pin,
         sensorType: 'DHT11',
-        timestamp: new Date().toISOString(),
-        mock: true,
-        note: 'Sensor read failed, using mock data'
+        timestamp: new Date().toISOString()
       }
     );
   } catch (error) {
@@ -172,8 +169,7 @@ export async function GET(request: NextRequest) {
         humidityPercent: mockData.humidity,
         pin: 4,
         sensorType: 'DHT11',
-        timestamp: new Date().toISOString(),
-        mock: true
+        timestamp: new Date().toISOString()
       }
     );
   }
