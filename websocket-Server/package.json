@@ -1,0 +1,21 @@
+{
+  "name": "arkiv-websocket-server",
+  "version": "1.0.0",
+  "description": "Standalone WebSocket server for Arkiv entity events",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": ["arkiv", "websocket", "blockchain"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@arkiv-network/sdk": "^0.4.4",
+    "socket.io": "^4.8.1",
+    "dotenv": "^16.4.5"
+  }
+}
+
+
