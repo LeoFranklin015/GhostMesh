@@ -360,7 +360,7 @@ function generateUUID(): string {
  */
 export async function storeMessageToArkiv(
   messageData: {
-    content: string
+    content: string   // JSON string like '{"type": "Weather", "data": 40}'
     from: string
     timestamp: string
     uuid?: string
@@ -377,45 +377,111 @@ export async function storeMessageToArkiv(
       }
     }
 
-    // Prepare message data for storage - encrypt ONLY the content field
-    console.log('🔒 [CREATE] Encrypting message content before storing to Arkiv...')
-    console.log('🔒 [CREATE] Original content to encrypt:', messageData.content)
+    console.log('🔒 [CREATE] Processing message content...')
+    console.log('🔒 [CREATE] Raw content received:', messageData.content)
     
-    // Encrypt only the content field - THIS IS CRITICAL
+    // Parse the content as JSON to extract type and data
+    let parsedContent: { type: string; data: any }
+    try {
+      parsedContent = JSON.parse(messageData.content)
+      console.log('✅ [CREATE] Content parsed as JSON:', parsedContent)
+      
+      if (!parsedContent.type || parsedContent.data === undefined) {
+        throw new Error('Content JSON must have "type" and "data" fields')
+      }
+    } catch (parseError: any) {
+      console.error('❌ [CREATE] Failed to parse content as standard JSON:', parseError)
+      console.error('❌ [CREATE] Content value:', messageData.content)
+      
+      // Try fallback parser for malformed JSON like: { type: "Weather" data: "40" } or { type: "Weather" data: 40 }
+      try {
+        console.log('🔄 [CREATE] Attempting fallback parser for malformed JSON...')
+        const content = messageData.content.trim()
+        
+        // Extract type using regex
+        const typeMatch = content.match(/type:\s*"([^"]+)"/)
+        // Try to match data with quotes first, then without quotes (for numbers)
+        let dataMatch = content.match(/data:\s*"([^"]+)"/)
+        let dataValue: any
+        
+        if (dataMatch) {
+          // Data has quotes: data: "40"
+          dataValue = dataMatch[1]
+        } else {
+          // Try to match data without quotes: data: 40
+          const numericMatch = content.match(/data:\s*([0-9.]+)/)
+          if (numericMatch) {
+            dataValue = numericMatch[1]
+          }
+        }
+        
+        if (!typeMatch || !dataValue) {
+          throw new Error('Could not extract type and data from malformed JSON')
+        }
+        
+        parsedContent = {
+          type: typeMatch[1],
+          data: dataValue
+        }
+        
+        console.log('✅ [CREATE] Fallback parser succeeded:', parsedContent)
+        console.log('⚠️ [CREATE] Warning: Received malformed JSON. Please send valid JSON like: {"type":"Weather","data":"40"}')
+      } catch (fallbackError: any) {
+        console.error('❌ [CREATE] Fallback parser also failed:', fallbackError)
+        return { 
+          success: false, 
+          error: `Content must be valid JSON like {"type":"Weather","data":"40"}. Received: ${messageData.content}. Error: ${parseError.message}` 
+        }
+      }
+    }
+
+    // Extract type and data from parsed content
+    const messageType = parsedContent.type
+    const messageDataToEncrypt = parsedContent.data
+    
+    console.log('🔒 [CREATE] Extracted type:', messageType)
+    console.log('🔒 [CREATE] Extracted data to encrypt:', messageDataToEncrypt)
+    
+    // Convert data to string for encryption (if not already a string)
+    const dataString = typeof messageDataToEncrypt === 'string' 
+      ? messageDataToEncrypt 
+      : JSON.stringify(messageDataToEncrypt)
+    
+    // Encrypt the data field - THIS IS CRITICAL
     // DO NOT STORE PLAINTEXT - encryption must succeed
     let encryptedContent: string
     try {
-      console.log('🔒 [CREATE] Calling encryptData with content:', messageData.content)
-      encryptedContent = await encryptData(messageData.content)
-      console.log('✅ [CREATE] Message content encrypted successfully')
+      console.log('🔒 [CREATE] Calling encryptData with data:', dataString)
+      encryptedContent = await encryptData(dataString)
+      console.log('✅ [CREATE] Message data encrypted successfully')
       console.log('🔒 [CREATE] Encrypted content length:', encryptedContent.length)
       console.log('🔒 [CREATE] Encrypted content preview:', encryptedContent.substring(0, 50) + '...')
       
       // CRITICAL: Verify encryption worked - encrypted content MUST be different from original
-      if (encryptedContent === messageData.content) {
+      if (encryptedContent === dataString) {
         console.error('❌ [CREATE] CRITICAL ERROR: Encrypted content matches original!')
-        console.error('❌ [CREATE] Original:', messageData.content)
+        console.error('❌ [CREATE] Original:', dataString)
         console.error('❌ [CREATE] Encrypted:', encryptedContent)
         throw new Error('Encryption failed - encrypted content matches original (encryption did not occur). Will not store plaintext.')
       }
       
       // Verify encrypted content looks like base64 (should be much longer than original)
-      if (encryptedContent.length < messageData.content.length * 2) {
-        console.warn('⚠️ [CREATE] Encrypted content seems too short. Original:', messageData.content.length, 'Encrypted:', encryptedContent.length)
+      if (encryptedContent.length < dataString.length * 2) {
+        console.warn('⚠️ [CREATE] Encrypted content seems too short. Original:', dataString.length, 'Encrypted:', encryptedContent.length)
       }
       
     } catch (error: any) {
-      console.error('❌ [CREATE] CRITICAL: Failed to encrypt content:', error)
+      console.error('❌ [CREATE] CRITICAL: Failed to encrypt data:', error)
       console.error('❌ [CREATE] Will NOT store plaintext to Arkiv')
       return { success: false, error: `Encryption failed - cannot store plaintext: ${error.message}` }
     }
     
-    console.log('🔒 [CREATE] Only encrypted content will be stored in Arkiv (no plaintext content)')
+    console.log('🔒 [CREATE] Only encrypted content will be stored in Arkiv (no plaintext data)')
     
     // Store data structure with encrypted content field
     const messagePayload = {
-      type: "xx-network-message",
-      content: encryptedContent,  // ONLY encrypted content is stored here - NOT plaintext
+      type: messageType,           // Dynamic type extracted from content JSON
+      content: encryptedContent,   // Encrypted data stored as content
       from: messageData.from,
       timestamp: messageData.timestamp,
       uuid: messageData.uuid || null,
@@ -423,16 +489,16 @@ export async function storeMessageToArkiv(
     }
     
     // FINAL VERIFICATION: Ensure we're storing encrypted content, not plaintext
-    if (messagePayload.content === messageData.content) {
+    if (messagePayload.content === dataString) {
       console.error('❌ [CREATE] CRITICAL: Payload content matches original - encryption failed!')
-      console.error('❌ [CREATE] Original content:', messageData.content)
+      console.error('❌ [CREATE] Original data:', dataString)
       console.error('❌ [CREATE] Payload content:', messagePayload.content)
       return { success: false, error: 'CRITICAL: Cannot store plaintext content. Encryption verification failed.' }
     }
     
     // Verify the payload has encrypted content
-    console.log('✅ [CREATE] Verification: Payload content is encrypted (different from original):', messagePayload.content !== messageData.content)
-    console.log('🔒 [CREATE] Original content:', messageData.content)
+    console.log('✅ [CREATE] Verification: Payload content is encrypted (different from original):', messagePayload.content !== dataString)
+    console.log('🔒 [CREATE] Original data:', dataString)
     console.log('🔒 [CREATE] Encrypted content (first 50 chars):', messagePayload.content.substring(0, 50) + '...')
     console.log('🔒 [CREATE] Encrypted content length:', messagePayload.content.length)
     
@@ -447,7 +513,7 @@ export async function storeMessageToArkiv(
     console.log('🔒 [CREATE] Final payload to store (first 200 chars):', payloadToStore.substring(0, 200) + '...')
     console.log('🔒 [CREATE] Verifying encrypted content is in payload...')
     const parsedCheck = JSON.parse(payloadToStore)
-    if (parsedCheck.data.content === messageData.content) {
+    if (parsedCheck.data.content === dataString) {
       console.error('❌ [CREATE] CRITICAL: Final payload still contains plaintext!')
       return { success: false, error: 'CRITICAL: Final payload verification failed - plaintext detected' }
     }
@@ -477,7 +543,7 @@ export async function storeMessageToArkiv(
         { key: 'type', value: messagePayload.type },
         { key: 'source', value: messagePayload.source },
         { key: 'id', value: entityId },
-        ...(messageData.uuid ? [{ key: 'uuid', value: messageData.uuid }] : []),
+        ...(messageData.uuid ? [{ key: 'uuid', value: String(messageData.uuid) }] : []),
         ...(messageData.from ? [{ key: 'from', value: messageData.from.substring(0, 20) }] : []),
         { key: 'timestamp', value: String(new Date(messageData.timestamp).getTime()) },
         { key: 'created', value: String(Date.now()) }
@@ -497,14 +563,15 @@ export async function storeMessageToArkiv(
 
 /**
  * READ: Query entities from Arkiv
- * @param query - Query string (e.g., 'type = "xx-network-message"')
+ * @param typeFilter - Optional type filter (e.g., "Weather", "xx-network-message"). If not provided, fetches all types.
  * @returns Array of entities matching the query
  */
 export async function readMessagesFromArkiv(
-  query: string = 'type = "xx-network-message"'
+  typeFilter?: string  // Optional type filter
 ): Promise<{ success: boolean; entities?: any[]; error?: string }> {
   try {
     console.log('📖 [READ] Starting read operation...')
+    console.log('📖 [READ] Type filter:', typeFilter || 'all types')
     console.log('📖 [READ] Client status:', { isInitialized, hasPublicClient: !!publicClient, hasWalletClient: !!walletClient })
     
     if (!isInitialized || !publicClient) {
@@ -530,11 +597,14 @@ export async function readMessagesFromArkiv(
 
     // Build query using new SDK API
     const queryBuilder = publicClient.buildQuery()
-    const queryResult = await queryBuilder
-      .where(eq('type', 'xx-network-message'))
-      .withAttributes(true)
-      .withPayload(true)
-      .fetch()
+    
+    // Apply type filter if provided
+    let query = queryBuilder.withAttributes(true).withPayload(true)
+    if (typeFilter) {
+      query = query.where(eq('type', typeFilter))
+    }
+    
+    const queryResult = await query.fetch()
     
     // Handle different return types - ensure we have an array
     let entities: any[] = []
@@ -654,13 +724,19 @@ export async function readMessagesFromArkiv(
 /**
  * UPDATE: Update an existing entity in Arkiv
  * @param entityKey - The entity key to update
- * @param newData - New data to store
- * @param expiresIn - New expiration time in seconds
+ * @param newData - New data to store (content should be JSON string with type and data)
+ * @param expiresIn - New expiration time in hours
  * @returns Updated entity receipt
  */
 export async function updateMessageInArkiv(
   entityKey: string,
-  newData: any,
+  newData: {
+    content: string   // JSON string like '{"type": "Weather", "data": 40}'
+    from?: string
+    timestamp?: string
+    uuid?: string
+    source?: string
+  },
   expiresInHours: number = DEFAULT_EXPIRATION_HOURS
 ): Promise<{ success: boolean; entityKey?: string; error?: string }> {
   try {
@@ -673,13 +749,77 @@ export async function updateMessageInArkiv(
 
     console.log('🔄 [UPDATE] Updating entity...', { entityKey, newData, expiresInHours })
 
-    // Encrypt only the content field before storing
-    const encryptedContent = await encryptData(newData.content || '')
+    // Parse the content as JSON to extract type and data
+    let parsedContent: { type: string; data: any }
+    try {
+      parsedContent = JSON.parse(newData.content)
+      console.log('✅ [UPDATE] Content parsed as JSON:', parsedContent)
+      
+      if (!parsedContent.type || parsedContent.data === undefined) {
+        throw new Error('Content JSON must have "type" and "data" fields')
+      }
+    } catch (parseError: any) {
+      console.error('❌ [UPDATE] Failed to parse content as standard JSON:', parseError)
+      console.error('❌ [UPDATE] Content value:', newData.content)
+      
+      // Try fallback parser for malformed JSON like: { type: "Weather" data: "40" } or { type: "Weather" data: 40 }
+      try {
+        console.log('🔄 [UPDATE] Attempting fallback parser for malformed JSON...')
+        const content = newData.content.trim()
+        
+        // Extract type using regex
+        const typeMatch = content.match(/type:\s*"([^"]+)"/)
+        // Try to match data with quotes first, then without quotes (for numbers)
+        let dataMatch = content.match(/data:\s*"([^"]+)"/)
+        let dataValue: any
+        
+        if (dataMatch) {
+          // Data has quotes: data: "40"
+          dataValue = dataMatch[1]
+        } else {
+          // Try to match data without quotes: data: 40
+          const numericMatch = content.match(/data:\s*([0-9.]+)/)
+          if (numericMatch) {
+            dataValue = numericMatch[1]
+          }
+        }
+        
+        if (!typeMatch || !dataValue) {
+          throw new Error('Could not extract type and data from malformed JSON')
+        }
+        
+        parsedContent = {
+          type: typeMatch[1],
+          data: dataValue
+        }
+        
+        console.log('✅ [UPDATE] Fallback parser succeeded:', parsedContent)
+        console.log('⚠️ [UPDATE] Warning: Received malformed JSON. Please send valid JSON like: {"type":"Weather","data":"40"}')
+      } catch (fallbackError: any) {
+        console.error('❌ [UPDATE] Fallback parser also failed:', fallbackError)
+        return { 
+          success: false, 
+          error: `Content must be valid JSON like {"type":"Weather","data":"40"}. Received: ${newData.content}. Error: ${parseError.message}` 
+        }
+      }
+    }
+
+    // Extract type and data from parsed content
+    const messageType = parsedContent.type
+    const messageDataToEncrypt = parsedContent.data
+    
+    // Convert data to string for encryption (if not already a string)
+    const dataString = typeof messageDataToEncrypt === 'string' 
+      ? messageDataToEncrypt 
+      : JSON.stringify(messageDataToEncrypt)
+    
+    // Encrypt the data field before storing
+    const encryptedContent = await encryptData(dataString)
     
     // Store data structure with encrypted content field
     const updatedPayload = {
-      type: newData.type || "xx-network-message",
-      content: encryptedContent,  // Only encrypted content
+      type: messageType,
+      content: encryptedContent,  // Encrypted data stored as content
       from: newData.from || '',
       timestamp: newData.timestamp || new Date().toISOString(),
       uuid: newData.uuid || null,
@@ -697,7 +837,7 @@ export async function updateMessageInArkiv(
       payload: jsonToPayload(encryptedPayload),
       contentType: 'application/json',
       attributes: [
-        { key: 'type', value: newData.type || "xx-network-message" },
+        { key: 'type', value: messageType },
         { key: 'updated', value: String(Date.now()) }
       ],
       expiresIn: ExpirationTime.fromHours(expiresInHours),
