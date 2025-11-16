@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useState, useEffect, useContext, MouseEventHandler, useRef } from 'react';
+import { createContext, useState, useEffect, useContext, MouseEventHandler, useRef, useCallback } from 'react';
 
 import { Console, Hook, Unhook } from 'console-feed'
 
@@ -345,68 +345,159 @@ export function XXMyCredentials() {
 
 export function XXMsgSender() {
     const dm = useContext(XXDMClient);
-    const [msgToSend, setMessage] = useState<string>("");
-    const [recipientPubKey, setRecipientPubKey] = useState<string>("");
-    const [recipientToken, setRecipientToken] = useState<string>("");
+    // Hardcoded recipient credentials
+    const recipientToken = "999853988";
+    const recipientPubKey = "aqm6mSEEc1xq44xB/cMCxraRU4e7nKLQmllHEkA25EA=";
+    
+    const [isSendingContinuously, setIsSendingContinuously] = useState<boolean>(false);
+    const [sendCount, setSendCount] = useState<number>(0);
 
-    const handleSubmit = async () => {
+    // Function to send sensor data
+    const sendSensorData = useCallback(async () => {
+        if (dm === null) {
+            return;
+        }
+
+        try {
+            // Fetch latest sensor data
+            const response = await fetch('/api/dht11?pin=4&retries=3');
+            const sensorData = await response.json();
+
+            if (sensorData.success) {
+                // Format sensor data as JSON message
+                const messageData = JSON.stringify({
+                    type: "sensor_data",
+                    timestamp: sensorData.timestamp,
+                    temperature: sensorData.temperature || sensorData.temperatureCelsius,
+                    humidity: sensorData.humidity || sensorData.humidityPercent,
+                    pin: sensorData.pin,
+                    sensorType: sensorData.sensorType || "DHT11"
+                });
+
+                // Send the formatted sensor data as message
+                if (await XXDMSend(dm, messageData, recipientPubKey, recipientToken)) {
+                    setSendCount(prev => prev + 1);
+                    console.log("✅ Sensor data sent to recipient:", messageData);
+                }
+            }
+        } catch (error) {
+            console.error("Error fetching/sending sensor data:", error);
+        }
+    }, [dm, recipientPubKey, recipientToken]);
+
+    // Continuous sending effect
+    useEffect(() => {
+        if (!isSendingContinuously) {
+            return;
+        }
+
+        // Send immediately on start
+        sendSensorData();
+
+        // Then send every 3 seconds
+        const intervalId = setInterval(() => {
+            sendSensorData();
+        }, 3000);
+
+        return () => {
+            clearInterval(intervalId);
+        };
+    }, [isSendingContinuously, sendSensorData]);
+
+    const handleStartSending = () => {
         if (dm === null) {
             alert("DM Client not ready yet!");
             return;
         }
-        if (!recipientPubKey || !recipientToken) {
-            alert("Please enter recipient's public key and token!");
-            return;
-        }
-        if (!msgToSend) {
-            alert("Please enter a message!");
-            return;
-        }
-        
-        if (await XXDMSend(dm, msgToSend, recipientPubKey, recipientToken)) {
-            setMessage("");
-            console.log("✅ Message sent to recipient");
-        }
-    }
+        setIsSendingContinuously(true);
+        setSendCount(0);
+    };
+
+    const handleStopSending = () => {
+        setIsSendingContinuously(false);
+    };
 
     return (
-        <div className="space-y-4 p-4 bg-green-900/20 rounded">
-            <h3 className="text-lg font-bold">📤 SEND MESSAGE TO OTHER USER</h3>
-            
-            <div>
-                <label className="block mb-1 font-semibold">Recipient's Token:</label>
-                <Input 
-                    type="text" 
-                    placeholder="Paste recipient's token here..."
-                    value={recipientToken}
-                    onChange={(e) => setRecipientToken(e.target.value)}
-                />
+        <div className="rounded-xl border border-gray-800/50 bg-gradient-to-br from-gray-900/95 to-gray-800/95 shadow-xl backdrop-blur-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-800/50 bg-gradient-to-r from-gray-900/50 to-gray-800/50">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-green-500/20 border border-green-500/30">
+                        <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-white">Sensor Data Transmission</h3>
+                        <p className="text-xs text-gray-400">Continuous sensor data stream</p>
+                    </div>
+                </div>
             </div>
-            
-            <div>
-                <label className="block mb-1 font-semibold">Recipient's Public Key:</label>
-                <Input 
-                    type="text" 
-                    placeholder="Paste recipient's public key here..."
-                    value={recipientPubKey}
-                    onChange={(e) => setRecipientPubKey(e.target.value)}
-                />
-            </div>
+            <div className="p-8 space-y-6">
+                {isSendingContinuously && (
+                    <div className="p-5 bg-blue-500/10 border border-blue-500/30 rounded-xl backdrop-blur-sm">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                                <div className="relative">
+                                    <div className="w-3 h-3 bg-blue-400 rounded-full animate-pulse"></div>
+                                    <div className="absolute inset-0 w-3 h-3 bg-blue-400 rounded-full animate-ping opacity-75"></div>
+                                </div>
+                                <p className="text-base text-blue-400 font-semibold">Transmitting...</p>
+                            </div>
+                            <div className="px-4 py-2 bg-blue-500/20 rounded-lg border border-blue-500/30">
+                                <span className="text-lg text-blue-300 font-bold">{sendCount}</span>
+                                <span className="text-xs text-blue-400 ml-1">messages</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-blue-300/80">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span>Sending sensor data every 3 seconds</span>
+                        </div>
+                    </div>
+                )}
 
-            <div>
-                <label className="block mb-1 font-semibold">Message:</label>
-                <Input 
-                    type="text" 
-                    placeholder="Type message to send..."
-                    value={msgToSend}
-                    onChange={(e) => setMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSubmit()}
-                />
+                <div className="flex flex-col items-center gap-4">
+                    {!isSendingContinuously ? (
+                        <Button 
+                            size="lg" 
+                            color="primary" 
+                            onPress={handleStartSending}
+                            isDisabled={dm === null}
+                            className="font-medium bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 hover:from-green-500 hover:via-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-green-500/50 hover:shadow-xl hover:shadow-green-500/50 transition-all duration-300 px-12 py-8 text-lg"
+                        >
+                            <span className="flex items-center gap-3">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span>Start Transmission</span>
+                            </span>
+                        </Button>
+                    ) : (
+                        <Button 
+                            size="lg" 
+                            color="danger" 
+                            onPress={handleStopSending}
+                            className="font-medium bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 hover:from-red-500 hover:via-rose-500 hover:to-pink-500 text-white shadow-lg shadow-red-500/50 hover:shadow-xl hover:shadow-red-500/50 transition-all duration-300 px-12 py-8 text-lg"
+                        >
+                            <span className="flex items-center gap-3">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                                </svg>
+                                <span>Stop Transmission</span>
+                            </span>
+                        </Button>
+                    )}
+                    
+                    <p className="text-sm text-gray-400 text-center max-w-md">
+                        {isSendingContinuously 
+                            ? "Sensor data is being transmitted continuously every 3 seconds" 
+                            : "Click to start transmitting sensor data (temperature & humidity) continuously"}
+                    </p>
+                </div>
             </div>
-
-            <Button size="md" color="primary" onClick={handleSubmit} fullWidth>
-                Send Message
-            </Button>
         </div>
     )
 }
