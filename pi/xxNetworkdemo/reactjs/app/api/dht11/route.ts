@@ -29,17 +29,37 @@ function getSensor() {
   return null;
 }
 
-// Generate mock sensor data
+// State for natural random walk simulation
+let currentTemperature = 22.5; // Starting temperature in °C
+let currentHumidity = 55.0;    // Starting humidity in %
+
+// Generate natural-looking mock sensor data using random walk
 function generateMockSensorData() {
-  // Generate realistic temperature (20-30°C) and humidity (40-60%)
-  const temperature = (20 + Math.random() * 10).toFixed(2);
-  const humidity = (40 + Math.random() * 20).toFixed(2);
+  // Natural temperature variation: small random walk (±0.5°C max change per reading)
+  // Temperature tends to stay in comfortable range (20-28°C)
+  const tempChange = (Math.random() - 0.5) * 1.0; // -0.5 to +0.5
+  currentTemperature = Math.max(20.0, Math.min(28.0, currentTemperature + tempChange));
+  
+  // Natural humidity variation: inverse correlation with temperature
+  // As temp increases, humidity slightly decreases (realistic behavior)
+  // Small random walk (±1% max change per reading), range 40-65%
+  const humidityChange = (Math.random() - 0.5) * 2.0; // -1 to +1
+  // Slight inverse correlation: when temp goes up, humidity tends to go down slightly
+  const tempInfluence = (currentTemperature - 24) * 0.1; // Small influence
+  currentHumidity = Math.max(40.0, Math.min(65.0, currentHumidity + humidityChange - tempInfluence));
+  
+  // Add tiny random noise to make it look more realistic (sensor precision)
+  const tempNoise = (Math.random() - 0.5) * 0.2;
+  const humidityNoise = (Math.random() - 0.5) * 0.5;
+  
+  const finalTemp = currentTemperature + tempNoise;
+  const finalHumidity = currentHumidity + humidityNoise;
   
   return {
-    temperature: parseFloat(temperature),
-    humidity: parseFloat(humidity),
-    temperatureString: temperature,
-    humidityString: humidity
+    temperature: finalTemp,
+    humidity: finalHumidity,
+    temperatureString: finalTemp.toFixed(2),
+    humidityString: finalHumidity.toFixed(2)
   };
 }
 
